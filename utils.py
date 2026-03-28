@@ -1,3 +1,4 @@
+import base64
 import datetime
 import mimetypes
 import time
@@ -107,3 +108,24 @@ def timestamp(ts) -> datetime.datetime:
     except Exception:
         tz = ZoneInfo("Asia/Seoul")
     return datetime.datetime.fromtimestamp(ts_seconds, tz=tz)
+
+def get_date_from_url(url: str) -> datetime.datetime | None:
+    """
+    Expecting a url in the format. The date can be gathered from the
+    https://phinf.wevpstatic.net/MjAyMjA3MTZfODQg/MDAxNjU3OTAxNTA3OTYw.XicWQ6eh1gk6nIC4GFtqWKCDiFZQCMLPvQ2lUqOjjxwg.6tnIZEYqlfnbR03YaBitEi1SxQldnjVGcnlTpMK37oAg.JPEG/aab3aeaf86d149b2aa73f9a793eebfea888.jpg
+    """
+    prefix = 'https://phinf.wevpstatic.net/'
+    if not url.startswith(prefix):
+        return None
+
+    parts = url.removeprefix(prefix).split('/')
+    date_part_encoded = parts[0]
+
+    print(date_part_encoded)
+
+    try:
+        # Decode it and take the first 8 characters (YYYYMMDD)
+        date_str = base64.b64decode(date_part_encoded).decode('utf-8')[:8]
+        return datetime.datetime.strptime(date_str, "%Y%m%d")
+    except Exception:
+        return None

@@ -674,10 +674,18 @@ def process_member_profiles():
                 # version gets a unique filename. This preserves historical
                 # pictures when an artist changes their profile.
                 import hashlib as _hl
-                url_hash    = _hl.md5(pic_url.encode()).hexdigest()[:8]
+                url_hash   = _hl.md5(pic_url.encode()).hexdigest()[:8]
+
+                identifier = url_hash
+
+                # TODO: Consider using the exact date format as seen in `helpers.make_filename`
+                created_at_date = None
+                if created_at_date := utils.get_date_from_url(pic_url):
+                    identifier = f"{identifier}_{created_at_date.strftime("%Y%m%d")}"
+
                 ext_match   = re.search(r"\.([a-zA-Z0-9]+)(\?|$)", pic_url)
                 extension   = ext_match.group(1) if ext_match else "jpg"
-                save_path   = profile_dir / f"{name}_{url_hash}.{extension}"
+                save_path   = profile_dir / f"{name}_{identifier}.{extension}"
                 if not save_path.exists():
-                    utils.download_file(pic_url, str(save_path.with_suffix("")))
+                    utils.download_file(pic_url, str(save_path.with_suffix("")), created_at_date)
                     time.sleep(DOWNLOAD_SLEEP)
