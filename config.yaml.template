@@ -47,16 +47,71 @@ paged_sleep: 2
 short_sleep: 0.5
 download_sleep: 3.0
 
+
+# Date format for filenames — uses Python strftime syntax.
+# This controls what {date} expands to in all filename templates.
+# {date_dotted} uses the same format but with all separators replaced by dots.
+#
+# The format string respects date_separator and time_separator below:
+#   %Y.%m.%d is rewritten using date_separator
+#   %H-%M-%S is rewritten using time_separator
+#
+# Examples with date_separator="." and time_separator="-":
+#   "%Y.%m.%d %H-%M-%S"  -> 2026.03.21 22-18-11
+# Examples with date_separator="-" and time_separator=".":
+#   "%Y.%m.%d %H-%M-%S"  -> 2026-03-21 22.18.11
+#
+# Note: colons (:) are automatically replaced with dashes since they are
+# illegal in Windows filenames.
+
 date_format: "%Y.%m.%d %H-%M-%S"
+
+# Separator used between year, month, day  (e.g. "." -> 2026.03.21)
 date_separator: "."
+
+# Separator used between hour, minute, second  (e.g. "-" -> 22-18-11)
 time_separator: "-"
+
+# Per-action date format overrides.
+# Each key matches a filename_templates key. If a key is absent, the global
+# date_format above is used as the fallback.
+#
+# Example — add timestamps only for lives and moments to distinguish same-day posts,
+# while keeping plain dates everywhere else:
+#
+#   date_formats:
+#     lives:          "%Y.%m.%d %H-%M-%S"
+#     moments:        "%Y.%m.%d %H-%M-%S"
+#     artist_posts:   "%Y.%m.%d"
+#     official_posts: "%Y.%m.%d"
+#     official_media: "%Y.%m.%d"
 
 date_formats:
   lives: "%Y.%m.%d %H-%M-%S"
 
+# API response cache
+# Cached JSON responses are stored under {base}/{community}/cache/
+# and reused on subsequent runs to reduce API calls.
+# Delete the cache folder manually to force a full refresh.
+# Set to false to disable caching entirely.
 cache_enabled: true
+
+# Download history
+# Tracks post IDs that have been successfully downloaded in
+# {base}/{community}/Cache/downloaded.json.
+# Allows skipping re-downloads even if the files were moved or deleted.
+# Set to false to disable — the archiver will fall back to filesystem checks only.
 download_history_enabled: true
 
+# Bracket style for {tier} and {post_id} placeholders in filename templates.
+# Each can be set independently.
+# Options: "square" -> [value]   "curly" -> {value}   "none" -> value
+#
+# Examples with default templates:
+#   square / square  ->  STAYC Seeun 2026.03.21 [Public] [1-171362020]
+#   square / curly   ->  STAYC Seeun 2026.03.21 [Public] {1-171362020}
+#   curly  / curly   ->  STAYC Seeun 2026.03.21 {Public} {1-171362020}
+#   none   / square  ->  STAYC Seeun 2026.03.21 Public [1-171362020]
 tier_bracket: "square"
 postid_bracket: "square"
 
@@ -77,6 +132,37 @@ folders:
   text_posts:       "{base}/{community}/{media}/{tier}/Text Posts/{artist}"
   text_official:    "{base}/{community}/{media}/Official Channel/{channel}"
 
+# Filename templates
+# Each content type has its own template key.
+#
+# Placeholders:
+#   {community}   - community name              e.g. Apink
+#   {artist}      - artist / channel name       e.g. EunJi
+#   {date}        - formatted by date_format / date_formats
+#                   e.g. "%Y.%m.%d %H-%M-%S" -> 2026.03.21 22-18-11
+#   {date_dotted} - same as {date} but all separators replaced with dots
+#   {post_id}     - post / attachment ID        e.g. 1-171362020_4-328756273
+#   {title}       - content title               e.g. 🎉Happy Birthday
+#                   (illegal filename chars replaced with -)
+#   {tier}        - "Public" or "Membership" wrapped in configured bracket style
+#                   e.g. [Public] or {Membership} — blank when not applicable
+#   NOTE: Do NOT add [ ] or { } around {post_id} or {tier} in your templates.
+#         Brackets are added automatically based on tier_bracket / postid_bracket.
+#
+# Template keys:
+#   lives          - live stream VODs
+#   moments        - artist moments (photo / video)
+#   artist_posts   - artist tab posts (photo / video)
+#   official_posts - official channel posts  ({artist} = channel name)
+#   official_media - official media tab + interactive menu videos / photos
+#
+# Examples:
+#   "{community} {artist} {date} [{post_id}]"
+#   "{date} {post_id}"
+ 
+# IMPORTANT: Do NOT put [ ] or { } around {post_id} or {tier} in templates.
+# The bracket style is controlled by tier_bracket and postid_bracket below.
+# make_filename applies the brackets automatically when expanding the placeholders.
 filename_templates:
   default:        "{community} {artist} {date} {post_id}"
   lives:          "{tier} {date} {community} {artist} {title} {post_id}"
@@ -87,7 +173,16 @@ filename_templates:
 
 # Per-community official channel entries for the interactive menu.
 # Key = community slug; each entry needs name + id (memberId from API).
+# Example:
+#   official_channels:
+#     - name: "floverse_9"
+#       id:   "58afde0dbc1fccd94cd44eff91fa3673"
 official_channels: {}
 
 # Former members still visible in feeds; key = community slug.
+# Example:
+#   former_members:
+#     fromis9:
+#       - name: "JANG GYURI"
+#         id:   "db56036fc59a94a9ef617261c90c783f"
 former_members: {}
