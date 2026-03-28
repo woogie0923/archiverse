@@ -54,8 +54,8 @@ def select_community_menu(communities: list[str]) -> str | None:
 def interactive_menu(community_id: str, *, can_change_community: bool = False):
     """
     Interactive menu shown when -c is provided with no action flags.
-    Sections (top to bottom): Filters, Artists, Official Channels, Actions.
-    Navigate with arrow keys; [B / ←] goes back to the previous section.
+    Sections (top to bottom): Filters, Artists, Official Channels, Archive, Actions.
+    Navigate with arrow keys; Tab/→ advances section, ←/B goes back (Archive and Actions are separate steps).
     """
     from live import get_key
 
@@ -124,21 +124,41 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         ("Text",       TEXT_OPTS),
     ]
 
-    ACTIONS = [
-        ("artist",     "Artist Posts"),
-        ("moments",    "Moments"),
-        ("live",       "Lives"),
-        ("ongoing_live", "Ongoing Lives"),
-        ("media",      "Media Tab"),
-        ("media_menu", "Media Categories"),
-        ("profile",    "Profile Pictures"),
+    # Archive tab: feed-style items. Actions tab: tooling (separate Tab/→ section).
+    ARCHIVE_LAYOUT: list[tuple[str, str | None, str]] = [
+        ("header", None, "Archive"),
+        ("item", "profile", "Profile Pictures"),
+        ("item", "moments", "Moments"),
+        ("item", "artist", "Artist Posts"),
     ]
     if official_channels:
-        ACTIONS.append(("official", "Official Channel"))
+        ARCHIVE_LAYOUT.append(("item", "official", "Official Channel"))
+    ARCHIVE_LAYOUT += [
+        ("item", "media", "Media Tab"),
+    ]
+    ACTIONS_TOOL_LAYOUT: list[tuple[str, str | None, str]] = [
+        ("header", None, "Actions"),
+        ("item", "media_menu", "Media Categories"),
+        ("item", "live", "Lives"),
+        ("item", "ongoing_live", "Ongoing Lives"),
+    ]
+    _action_keys = [
+        k for t, k, _ in ARCHIVE_LAYOUT + ACTIONS_TOOL_LAYOUT
+        if t == "item" and k
+    ]
+    ACTION_LABELS = {
+        k: lab
+        for t, k, lab in ARCHIVE_LAYOUT + ACTIONS_TOOL_LAYOUT
+        if t == "item" and k
+    }
+    _archive_item_keys = [k for t, k, _ in ARCHIVE_LAYOUT if t == "item" and k]
+    _actions_tool_item_keys = [k for t, k, _ in ACTIONS_TOOL_LAYOUT if t == "item" and k]
+    archive_item_total = max(0, len(ARCHIVE_LAYOUT) - 1)
+    actions_item_total = max(0, len(ACTIONS_TOOL_LAYOUT) - 1)
 
     artist_sel  = [False] * len(artist_profiles)
     channel_sel = [False] * len(official_channels)
-    action_sel  = {k: False for k, _ in ACTIONS}
+    action_sel  = {k: False for k in _action_keys}
 
     # ── Load persisted menu state ─────────────────────────────────────────
     def _menu_state_path() -> Path:
@@ -174,8 +194,9 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
     SECTION_FILTERS  = 0
     SECTION_ARTISTS  = 1
     SECTION_CHANNELS = 2
-    SECTION_ACTIONS  = 3
-    NUM_SECTIONS     = 4
+    SECTION_ARCHIVE  = 3
+    SECTION_ACTIONS  = 4
+    NUM_SECTIONS     = 5
 
     section = SECTION_FILTERS
     cursor  = 0
@@ -183,13 +204,16 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
     # section is active (shared cursor index would move the visible window).
     artist_win_focus = 0
     channel_win_focus = 0
-    action_win_focus = 0
+    archive_win_focus = 0
+    actions_tool_win_focus = 0
 
     def _section_len(s):
         if s == SECTION_FILTERS:  return len(FILTERS)
         if s == SECTION_ARTISTS:  return len(artist_profiles) + 1  # +1 for (All) row
         if s == SECTION_CHANNELS: return len(official_channels)
-        return len(ACTIONS)
+        if s == SECTION_ARCHIVE:  return archive_item_total
+        if s == SECTION_ACTIONS:   return actions_item_total
+        return 0
 
     from rich.live import Live
     from rich.table import Table
@@ -202,13 +226,15 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
     def _build_renderable():
         from rich.markup import escape
 
-        nonlocal artist_win_focus, channel_win_focus, action_win_focus
+        nonlocal artist_win_focus, channel_win_focus, archive_win_focus, actions_tool_win_focus
         if section == SECTION_ARTISTS:
             artist_win_focus = cursor
         elif section == SECTION_CHANNELS:
             channel_win_focus = cursor
+        elif section == SECTION_ARCHIVE:
+            archive_win_focus = cursor
         elif section == SECTION_ACTIONS:
-            action_win_focus = cursor
+            actions_tool_win_focus = cursor
 
         try:
             th = int(console.size.height)
@@ -244,7 +270,9 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         n_nav = 4 + (1 if can_change_community else 0)
         footer_block = 1 + n_summary + n_nav
         filt_rows = 1 + len(FILTERS)
-        action_rows_full = len(ACTIONS)
+        archive_rows_full = len(ARCHIVE_LAYOUT)
+        actions_tool_rows_full = len(ACTIONS_TOOL_LAYOUT)
+        action_rows_full = archive_rows_full + actions_tool_rows_full
         title_h = 2 if th > 26 else 1
 
         art_data_total = 1 + len(artist_profiles) if artist_profiles else 1
@@ -281,7 +309,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
                 + gap
                 + sep_n
                 + filt_rows
-                + (1 + action_rows)
+                + action_rows
                 + footer_block
                 + footer_extra
                 + pad_slop
@@ -290,8 +318,10 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
 
         compact_status = th < 32
         loose = th >= 26
-        sep_lines = 4 if loose else 0
-        title_gap = 1 if (not loose and th >= 28) else 0
+        # Reserve vertical space for blank lines between major blocks (5 gaps: filter…actions).
+        sep_n = 5
+        # Blank line after title on short / non-maximized terminals.
+        title_gap = 1 if (not loose or th < 28) else 0
         pad_outer = 2 if (loose or th >= 24) else 0
         pad_edge = (1, 2) if loose else ((1, 2) if th >= 24 else (0, 1))
         cell_pad = (0, 1, 0, 1)
@@ -302,7 +332,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
                 compact_board=compact_status,
                 action_rows=av,
                 gap=title_gap,
-                sep_n=sep_lines,
+                sep_n=sep_n,
                 p_outer=pad_outer,
             )
 
@@ -312,8 +342,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
             mid_budget = _mid_for(action_vis)
         while mid_budget < 4 and loose:
             loose = False
-            sep_lines = 0
-            title_gap = 1 if th >= 28 else 0
+            title_gap = 1 if th < 28 else 0
             pad_outer = 2 if th >= 24 else 0
             pad_edge = (1, 2) if th >= 24 else (0, 1)
             mid_budget = _mid_for(action_vis)
@@ -325,6 +354,50 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
             mid_budget = _mid_for(action_vis)
 
         mid_budget = max(0, _mid_for(action_vis))
+
+        # Archive / Actions: like Artists / Channels — fixed section headers + windowed item rows.
+        action_body_budget = max(0, action_vis - 2)
+        action_body_full = archive_item_total + actions_item_total
+        if action_body_full <= action_body_budget:
+            archive_cap = archive_item_total
+            actions_cap = actions_item_total
+        elif action_body_budget == 0:
+            archive_cap = 0
+            actions_cap = 0
+        else:
+            # Floor of 1 visible item row per section when that section has items (MIN_ACT_ROWS=3 is too greedy for tight terminals).
+            archive_floor = 1 if archive_item_total else 0
+            actions_floor = 1 if actions_item_total else 0
+            archive_cap = max(
+                archive_floor,
+                min(archive_item_total, max(1, action_body_budget * 55 // 100)),
+            )
+            actions_cap = max(
+                actions_floor,
+                min(actions_item_total, max(1, action_body_budget - archive_cap)),
+            )
+            archive_cap = min(archive_item_total, archive_cap)
+            actions_cap = min(actions_item_total, actions_cap)
+            while archive_cap + actions_cap > action_body_budget and archive_cap > archive_floor:
+                archive_cap -= 1
+            while archive_cap + actions_cap > action_body_budget and actions_cap > actions_floor:
+                actions_cap -= 1
+            # Do not steal below per-section floor (third loop used to drive caps to 0 and produced "Archive (1–0 of N)").
+            while archive_cap + actions_cap > action_body_budget:
+                if archive_cap >= actions_cap:
+                    if archive_cap > archive_floor:
+                        archive_cap -= 1
+                    elif actions_cap > actions_floor:
+                        actions_cap -= 1
+                    else:
+                        break
+                else:
+                    if actions_cap > actions_floor:
+                        actions_cap -= 1
+                    elif archive_cap > archive_floor:
+                        archive_cap -= 1
+                    else:
+                        break
 
         if _mid_used(art_data_total, ch_total) <= mid_budget:
             art_cap = art_data_total
@@ -445,42 +518,76 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
                     Text(escape(official_channels[i]["profileName"]), style=st),
                 )
 
-        # ── Actions ──────────────────────────────────────────────────────
-        action_table = Table(show_header=False, show_edge=False, box=None,
-                             pad_edge=False, padding=cell_pad)
-        action_table.add_column("Sel", justify="right", no_wrap=True, width=3)
-        action_table.add_column("Item", overflow="ellipsis", no_wrap=True, max_width=cw["item_max"])
+        # ── Archive (fixed header + windowed items, like Artists) ─────
+        archive_table = Table(show_header=False, show_edge=False, box=None,
+                              pad_edge=False, padding=cell_pad)
+        archive_table.add_column("Sel", justify="right", no_wrap=True, width=3)
+        archive_table.add_column("Item", overflow="ellipsis", no_wrap=True, max_width=cw["item_max"])
 
-        active = (section == SECTION_ACTIONS)
-        hdr_style = "bold cyan" if active else "bold"
-        act_hdr = "Actions"
-        if action_rows_full > action_vis:
-            ax0, ax1 = _slice_window(action_rows_full, action_win_focus, action_vis)
-            act_hdr = (
-                f"Actions  [dim]({ax0 + 1}–{ax1} of {action_rows_full})[/dim]"
+        active_arc = (section == SECTION_ARCHIVE)
+        hdr_arc = "bold cyan" if active_arc else "bold"
+        if archive_item_total > archive_cap and archive_cap > 0:
+            a0_arc, a1_arc = _slice_window(
+                archive_item_total, archive_win_focus, archive_cap
             )
-        action_table.add_row(
-            Text("►" if active else " ", style=hdr_style),
-            Text.from_markup(act_hdr) if "[" in act_hdr else Text(act_hdr, style=hdr_style),
+            if a1_arc > a0_arc:
+                arc_hdr = (
+                    f"Archive  [dim]({a0_arc + 1}–{a1_arc} of {archive_item_total})[/dim]"
+                )
+            else:
+                arc_hdr = "Archive"
+        else:
+            a0_arc, a1_arc = 0, archive_item_total
+            arc_hdr = "Archive"
+        archive_table.add_row(
+            Text("►" if active_arc else " ", style=hdr_arc),
+            Text.from_markup(arc_hdr) if "[" in arc_hdr else Text(arc_hdr, style=hdr_arc),
         )
-        ax0, ax1 = (
-            _slice_window(action_rows_full, action_win_focus, action_vis)
-            if action_rows_full > action_vis
-            else (0, action_rows_full)
-        )
-        for i in range(ax0, ax1):
-            key, label = ACTIONS[i]
-            is_cur = active and cursor == i
+        for j in range(a0_arc, a1_arc):
+            row_kind, key, label = ARCHIVE_LAYOUT[j + 1]
+            is_cur = active_arc and cursor == j
             st = "reverse bold" if is_cur else ""
             chk = "[X]" if action_sel[key] else "[ ]"
-            action_table.add_row(Text(chk, style=st), Text(label, style=st))
+            archive_table.add_row(Text(chk, style=st), Text(escape(label), style=st))
+
+        # ── Actions (fixed header + windowed items, like Channels) ──────
+        actions_tool_table = Table(show_header=False, show_edge=False, box=None,
+                                   pad_edge=False, padding=cell_pad)
+        actions_tool_table.add_column("Sel", justify="right", no_wrap=True, width=3)
+        actions_tool_table.add_column("Item", overflow="ellipsis", no_wrap=True, max_width=cw["item_max"])
+
+        active_at = (section == SECTION_ACTIONS)
+        hdr_at = "bold cyan" if active_at else "bold"
+        if actions_item_total > actions_cap and actions_cap > 0:
+            a0_act, a1_act = _slice_window(
+                actions_item_total, actions_tool_win_focus, actions_cap
+            )
+            if a1_act > a0_act:
+                act_hdr = (
+                    f"Actions  [dim]({a0_act + 1}–{a1_act} of {actions_item_total})[/dim]"
+                )
+            else:
+                act_hdr = "Actions"
+        else:
+            a0_act, a1_act = 0, actions_item_total
+            act_hdr = "Actions"
+        actions_tool_table.add_row(
+            Text("►" if active_at else " ", style=hdr_at),
+            Text.from_markup(act_hdr) if "[" in act_hdr else Text(act_hdr, style=hdr_at),
+        )
+        for j in range(a0_act, a1_act):
+            row_kind, key, label = ACTIONS_TOOL_LAYOUT[j + 1]
+            is_cur = active_at and cursor == j
+            st = "reverse bold" if is_cur else ""
+            chk = "[X]" if action_sel[key] else "[ ]"
+            actions_tool_table.add_row(Text(chk, style=st), Text(escape(label), style=st))
 
         # ── Summary & nav ─────────────────────────────────────────────────
         sel_artists  = [artist_profiles[i]["artistOfficialProfile"]["officialName"]
                         for i, v in enumerate(artist_sel) if v]
         sel_channels = [official_channels[i]["profileName"]
                         for i, v in enumerate(channel_sel) if v]
-        sel_actions  = [label for k, label in ACTIONS if action_sel[k]]
+        sel_actions  = [ACTION_LABELS[k] for k in _action_keys if action_sel.get(k)]
         if not any(artist_sel) and artist_profiles:
             artists_summary = "(all — none explicitly selected)"
         elif all(artist_sel) and artist_profiles:
@@ -528,7 +635,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         if len(menu_title) > tw - 2:
             menu_title = (f"═══ {state.COMMUNITY_NAME} — Menu ═══")[: tw - 1]
 
-        sep = [Text("")] if sep_lines == 4 else []
+        sep = [Text("")] if sep_n > 0 else []
         parts = [
             menu_status_board_renderable(compact=compact_status),
             Text(menu_title, style="bold"),
@@ -538,7 +645,8 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         parts += sep + [filter_table]
         parts += sep + [artist_table]
         parts += sep + [channel_table]
-        parts += sep + [action_table]
+        parts += sep + [archive_table]
+        parts += sep + [actions_tool_table]
         parts += [Text("─" * rule_w, style="dim")]
         if footer_extra:
             parts.append(Text(""))
@@ -583,8 +691,14 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
                             artist_sel[cursor - 1] = not artist_sel[cursor - 1]
                     elif section == SECTION_CHANNELS and official_channels:
                         channel_sel[cursor] = not channel_sel[cursor]
-                    elif section == SECTION_ACTIONS:
-                        action_sel[ACTIONS[cursor][0]] = not action_sel[ACTIONS[cursor][0]]
+                    elif section == SECTION_ARCHIVE and archive_item_total:
+                        rk, ak, _ = ARCHIVE_LAYOUT[cursor + 1]
+                        if rk == "item" and ak:
+                            action_sel[ak] = not action_sel[ak]
+                    elif section == SECTION_ACTIONS and actions_item_total:
+                        rk, ak, _ = ACTIONS_TOOL_LAYOUT[cursor + 1]
+                        if rk == "item" and ak:
+                            action_sel[ak] = not action_sel[ak]
                 elif key == "a":
                     if section == SECTION_ARTISTS and artist_profiles:
                         v = not all(artist_sel)
@@ -592,11 +706,16 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
                     elif section == SECTION_CHANNELS and official_channels:
                         v = not all(channel_sel)
                         channel_sel[:] = [v] * len(channel_sel)
+                    elif section == SECTION_ARCHIVE:
+                        v = not all(action_sel[k] for k in _archive_item_keys)
+                        for k in _archive_item_keys:
+                            action_sel[k] = v
                     elif section == SECTION_ACTIONS:
-                        v = not all(action_sel.values())
-                        for k in action_sel: action_sel[k] = v
+                        v = not all(action_sel[k] for k in _actions_tool_item_keys)
+                        for k in _actions_tool_item_keys:
+                            action_sel[k] = v
                 elif key in ("s", "enter"):
-                    chosen_actions = [k for k, _ in ACTIONS if action_sel[k]]
+                    chosen_actions = [k for k in _action_keys if action_sel.get(k)]
                     if not chosen_actions:
                         continue
                     break
@@ -615,7 +734,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
 
     chosen_channel_ids  = [official_channels[i]["memberId"]
                            for i, v in enumerate(channel_sel) if v]
-    chosen_action_keys  = [k for k, _ in ACTIONS if action_sel[k]]
+    chosen_action_keys  = [k for k in _action_keys if action_sel.get(k)]
 
     for i, (_, opts) in enumerate(FILTERS):
         for state_key, val in opts[filter_idx[i]][1].items():
