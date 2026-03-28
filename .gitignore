@@ -1,0 +1,11 @@
+config.yaml
+weverse_token.json
+
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+
+*.bak

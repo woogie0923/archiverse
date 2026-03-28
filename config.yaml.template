@@ -1,0 +1,93 @@
+# Copy this file to config.yaml and fill in your values.
+#   cp config.yaml.template config.yaml          (macOS / Linux)
+#   copy config.yaml.template config.yaml        (Windows CMD)
+#   Copy-Item config.yaml.template config.yaml   (PowerShell)
+# Do not commit real tokens or paths if your repo is public.
+#
+# Interactive menus need a real terminal (TTY). On macOS/Linux, run from Terminal,
+# iTerm, etc.; some IDE "Run" panels have no TTY and keyboard input will not work.
+
+# Bearer token from Weverse (see project docs / login flow).
+auth_token: ""
+
+# Optional: refresh token for long-running DRM/live recording (see weverse_auth.py).
+# Leave empty to use auth_token only.
+weverse_refresh_token: ""
+
+# Communities for the picker when you run: python wv-archive.py (no -c).
+menu_communities:
+  - example-community-slug
+
+# Optional: pin communityId (hex string) when API slug lookup fails.
+# menu_community_ids:
+#   example-community-slug: "36"
+
+# Widevine device file (.wvd) for DRM decryption.
+# Windows: "D:/path/to/WVD_1.wvd"
+# macOS/Linux: "/home/you/.local/share/wv-archive/WVD_1.wvd"
+wvd_device_path: ""
+
+binaries:
+  # Use bare names if these are on PATH; otherwise use full paths.
+  ffmpeg: "ffmpeg"
+  # Windows: "D:/tools/n-m3u8dl-re.exe"   macOS/Linux: "/usr/local/bin/N_m3u8DL-RE"
+  n_m3u8dl_re: "N_m3u8DL-RE"
+  yt_dlp: "yt-dlp"
+  mkvpropedit: "mkvpropedit"
+  streamlink: "streamlink"
+
+# Browser for yt-dlp cookie extraction (must be logged into weverse.io).
+# Examples: firefox, chrome, chromium, edge, safari (platform-dependent).
+cookies_from_browser: "firefox"
+
+timezone: "Asia/Seoul"
+
+stop_threshold: 200
+paged_sleep: 2
+short_sleep: 0.5
+download_sleep: 3.0
+
+date_format: "%Y.%m.%d %H-%M-%S"
+date_separator: "."
+time_separator: "-"
+
+date_formats:
+  lives: "%Y.%m.%d %H-%M-%S"
+
+cache_enabled: true
+download_history_enabled: true
+
+tier_bracket: "square"
+postid_bracket: "square"
+
+# Base output directory (absolute path recommended). Empty "" = current working directory.
+base_dir: ""
+
+media_folder: "Media"
+
+folders:
+  lives:            "{base}/{community}/{media}/{tier}/Lives/{artist}"
+  moments:          "{base}/{community}/{media}/{tier}/Moments/{artist}"
+  artist_posts:     "{base}/{community}/{media}/{tier}/Artist Posts/{artist}"
+  official_media:   "{base}/{community}/{media}/{tier}/Official Media"
+  official_channel: "{base}/{community}/{media}/Official Channel/{channel}"
+  profiles:         "{base}/{community}/{media}/Profile Pictures/{artist}"
+  password_cache:   "{base}/{community}/password_cache.json"
+  api_cache:        "{base}/{community}/Cache"
+  text_posts:       "{base}/{community}/{media}/{tier}/Text Posts/{artist}"
+  text_official:    "{base}/{community}/{media}/Official Channel/{channel}"
+
+filename_templates:
+  default:        "{community} {artist} {date} {post_id}"
+  lives:          "{tier} {date} {community} {artist} {title} {post_id}"
+  moments:        "{tier} {community} {artist} {date} {post_id}"
+  artist_posts:   "{tier} {date} {artist} {post_id}"
+  official_posts: "{artist} {date} {post_id}"
+  official_media: "{tier} {artist} {date} {title} {post_id}"
+
+# Per-community official channel entries for the interactive menu.
+# Key = community slug; each entry needs name + id (memberId from API).
+official_channels: {}
+
+# Former members still visible in feeds; key = community slug.
+former_members: {}
