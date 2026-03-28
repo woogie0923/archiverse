@@ -1,7 +1,7 @@
 """
 ongoing_live.py
 
-Monitor and record ongoing (on-air) Weverse livestreams using HLS + N_m3u8DL-RE.
+Monitor and record ongoing (on-air) Weverse livestreams (Streamlink + optional N_m3u8DL-RE subs).
 """
 
 from __future__ import annotations
@@ -159,8 +159,8 @@ def _compute_output(file_info: dict) -> tuple[Path, str]:
 def _record_one(file_info: dict, poll_conf: dict):
     """
     Record one specific live post:
-      - Streamlink for video (mkv)
-      - N_m3u8DL-RE for subtitles
+      - Streamlink for video (.mp4 or .mkv from --ongoing-live-output-format)
+      - Optional N_m3u8DL-RE for subtitles
     """
     from text_writer import embed_url_metadata, live_url
 
@@ -181,31 +181,39 @@ def _record_one(file_info: dict, poll_conf: dict):
     if is_already_downloaded(str(out_dir / stem), post_id):
         return
 
-    hls_url, is_drm_like = get_live_hls_url(video_id)
+    hls_url, _ = get_live_hls_url(video_id)
     if not hls_url:
         console.print(f"  [Live Record] No HLS URL for {post_id}")
         return
 
-    output_path = out_dir / f"{stem}.mkv"
-    output_file = record_ongoing_live_streamlink(hls_url=hls_url, output_path=output_path)
+    created_at = _parse_published_at(file_info.get("published_at"))
+
+    fmt = str(poll_conf.get("output_format") or "mp4").strip().lower()
+    if fmt not in ("mp4", "mkv"):
+        fmt = "mp4"
+    output_path = out_dir / f"{stem}.{fmt}"
+    output_file = record_ongoing_live_streamlink(
+        hls_url=hls_url, output_path=output_path
+    )
     if not output_file or not output_file.exists():
         return
 
-    # Subtitles (download separately; does not mux automatically here)
-    download_ongoing_live_subtitles_nm3u8dlre(
-        hls_url=hls_url,
-        output_dir=out_dir,
-        save_name=stem,
-        subtitle_langs=poll_conf["subtitle_langs"].replace("eng", "eng").replace("kor", "kor"),
-        live_take_count=poll_conf["subs_live_take_count"],
-        live_wait_time=poll_conf["subs_live_wait_time"],
-    )
+    # Subtitles (optional; separate N_m3u8DL-RE pass; --ongoing-live-subs none skips)
+    subs_lang = str(poll_conf.get("subtitle_langs") or "eng|kor").strip()
+    if subs_lang.lower() not in ("none", "no", "off", "-", ""):
+        download_ongoing_live_subtitles_nm3u8dlre(
+            hls_url=hls_url,
+            output_dir=out_dir,
+            save_name=stem,
+            subtitle_langs=subs_lang,
+            live_take_count=poll_conf["subs_live_take_count"],
+            live_wait_time=poll_conf["subs_live_wait_time"],
+        )
 
     # Set/overwrite created timestamp (belt-and-suspenders).
     try:
-        created_dt = _parse_published_at(file_info.get("published_at"))
-        if created_dt:
-            edit_creation_date(str(output_file), created_dt)
+        if created_at:
+            edit_creation_date(str(output_file), created_at)
     except Exception:
         pass
 
@@ -228,6 +236,8 @@ def process_ongoing_lives(
     live_wait_time: int = 5,
     subtitle_langs: str = "eng|kor",
     output_format: str = "mp4",
+    *,
+    skip_monitor_prompt: bool = False,
 ):
     """
     Monitor ongoing lives and record them until the user stops the program.
@@ -341,11 +351,17 @@ def process_ongoing_lives(
             if is_idle:
                 ended_ids = ", ".join(ended[-3:])
                 ended.clear()
-                ans = console.input(
-                    f"\n  [Ongoing Live] Recording finished ({ended_ids}). "
-                    "Keep monitoring? [Y/n]: "
-                ).strip().lower()
-                if ans in ("n", "no", "q", "quit", "exit"):
-                    return
+                if skip_monitor_prompt:
+                    console.print(
+                        f"\n  [Ongoing Live] Recording finished ({ended_ids}). "
+                        "[dim]Continuing to monitor…[/dim]"
+                    )
+                else:
+                    ans = console.input(
+                        f"\n  [Ongoing Live] Recording finished ({ended_ids}). "
+                        "Keep monitoring? [Y/n]: "
+                    ).strip().lower()
+                    if ans in ("n", "no", "q", "quit", "exit"):
+                        return
         time.sleep(poll_seconds)
 

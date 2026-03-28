@@ -117,4 +117,3 @@ def get_access_token(min_valid_seconds: int = 6 * 3600) -> str:
 
     COMMON_HEADERS["Authorization"] = f"Bearer {accessToken}"
     return str(accessToken)
-

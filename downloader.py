@@ -6,8 +6,11 @@ Persistent JSON caches and download history live in download_cache.py; this
 module re-exports mark_downloaded / is_already_downloaded for compatibility.
 """
 import json
+import os
 import re
+import shlex
 import subprocess
+from datetime import datetime
 import urllib.parse
 import urllib.request 
 import shutil
@@ -21,7 +24,7 @@ from pywidevine import PSSH, Device, Cdm
 import utils
 from utils import console
 import state
-from config import COMMON_HEADERS, BINARIES, WVD_DEVICE_PATH
+from config import AUTH_TOKEN, COMMON_HEADERS, BINARIES, WVD_DEVICE_PATH, get_folder
 from api import make_extractor, run_extr
 from helpers import mux_media_with_subtitles
 from download_cache import (
@@ -662,28 +665,57 @@ def record_ongoing_live_nm3u8dlre(
     return output_file
 
 
+def _streamlink_weverse_user_agent() -> str:
+    """Browser-like UA; Streamlink + Weverse HLS key requests expect this shape."""
+    return (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
+    )
+
+
+def _streamlink_weverse_authorization_value() -> str:
+    """
+    Value for --http-header Authorization=... (must be Bearer + JWT).
+    Prefer auth_token from config; else COMMON_HEADERS (e.g. after token refresh).
+    """
+    raw = (AUTH_TOKEN or "").strip()
+    if raw:
+        return f"Bearer {raw}"
+    h = (COMMON_HEADERS.get("Authorization") or "").strip()
+    if h.lower().startswith("bearer "):
+        return h
+    return h
+
+
+def _streamlink_preferred_ongoing_quality(streams: dict) -> str:
+    """
+    Pick Streamlink stream name for ongoing lives. Prefer highest alt renditions
+    when present (Weverse HLS often exposes 1920p_alt / 1080p_alt).
+    """
+    for name in ("1920p_alt", "1080p_alt"):
+        if name in streams:
+            return name
+    return "best"
+
+
 def _streamlink_list_streams(hls_url: str) -> dict:
     """
     Return Streamlink's discovered stream map for a URL via --json.
+    Uses the same --http-header shape as a working manual Streamlink invocation
+    (Authorization=Bearer <jwt>, no Origin).
     """
     streamlink = BINARIES.get("streamlink", "streamlink")
-    ua = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
-    )
-    auth = COMMON_HEADERS.get("Authorization", "")
+    ua = _streamlink_weverse_user_agent()
+    auth_val = _streamlink_weverse_authorization_value()
     cmd = [
         streamlink,
         "--json",
         "--http-header",
         f"User-Agent={ua}",
-        "--http-header",
-        "Referer=https://weverse.io/",
     ]
-    if auth:
-        cmd.extend(["--http-header", f"Authorization={auth}"])
-    cmd.append(hls_url)
+    if auth_val:
+        cmd.extend(["--http-header", f"Authorization={auth_val}"])
+    cmd.extend(["--http-header", "Referer=https://weverse.io/", hls_url])
 
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -696,6 +728,29 @@ def _streamlink_list_streams(hls_url: str) -> dict:
 
 
 _streamlink_help_cache: str | None = None
+
+
+def _append_streamlink_command_log(cmd: list[str]) -> None:
+    """Append the exact Streamlink argv line to api_cache/streamlink_commands.log."""
+    try:
+        if os.name == "nt":
+            cmd_str = subprocess.list2cmdline(cmd)
+        else:
+            try:
+                cmd_str = shlex.join(cmd)
+            except (TypeError, ValueError):
+                cmd_str = " ".join(str(x) for x in cmd)
+        log_dir = None
+        if state.COMMUNITY_NAME:
+            log_dir = Path(get_folder("api_cache", community=state.COMMUNITY_NAME))
+        if not log_dir:
+            log_dir = Path(__file__).parent
+        log_path = log_dir / "streamlink_commands.log"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().isoformat(timespec='seconds')}] {cmd_str}\n")
+    except Exception:
+        pass
 
 
 def _streamlink_supports(flag: str) -> bool:
@@ -724,49 +779,53 @@ def record_ongoing_live_streamlink(
     """
     Record an ongoing livestream using Streamlink.
 
-    Uses quality selection logic:
-      - prefer 1080p_alt if present
-      - else best
+    CLI shape (working with Weverse HLS + AES keys):
+      streamlink --http-header "User-Agent=..." --http-header "Authorization=Bearer …"
+        --http-header "Referer=https://weverse.io/" ... -o out.ts URL <quality>
+
+    Quality: prefer 1920p_alt, then 1080p_alt, else best.
+
+    Container: output_path suffix must be .mp4 or .mkv; remux uses FFmpeg copy.
     """
     if not hls_url:
         return None
 
     streamlink = BINARIES.get("streamlink", "streamlink")
-    ua = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
-    )
+    ua = _streamlink_weverse_user_agent()
+    auth_val = _streamlink_weverse_authorization_value()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Streamlink writes raw stream bytes; the output extension does not
-    # guarantee the container. Record to a temp transport stream and remux
-    # to a real Matroska file afterward.
-    temp_path = output_path.with_suffix(".ts")
+    suf = output_path.suffix.lower().lstrip(".")
+    out_fmt = suf if suf in ("mp4", "mkv") else "mp4"
+    final_path = output_path.with_suffix(f".{out_fmt}")
+
+    # Streamlink writes raw stream bytes; remux to mp4 or mkv afterward.
+    temp_path = final_path.with_suffix(".ts")
 
     streams = _streamlink_list_streams(hls_url)
-    quality = "1080p_alt" if "1080p_alt" in streams else "best"
+    quality = _streamlink_preferred_ongoing_quality(streams)
 
-    auth = COMMON_HEADERS.get("Authorization", "")
     cmd: list[str] = [
         streamlink,
         "--http-header",
         f"User-Agent={ua}",
-        "--http-header",
-        "Referer=https://weverse.io/",
-        "--http-header",
-        f"Authorization={auth}" if auth else "",
-        "--stream-timeout",
-        "120",
-        "-o",
-        str(temp_path),
-        "--hls-live-restart",
-        hls_url,
-        quality,
     ]
-    # Remove empty auth header token if missing
-    cmd = [c for c in cmd if c != ""]
+    if auth_val:
+        cmd.extend(["--http-header", f"Authorization={auth_val}"])
+    cmd.extend(
+        [
+            "--http-header",
+            "Referer=https://weverse.io/",
+            "--stream-timeout",
+            "120",
+            "-o",
+            str(temp_path),
+            "--hls-live-restart",
+            hls_url,
+            quality,
+        ]
+    )
 
     # Streamlink option compatibility:
     # - Newer versions: --stream-segmented-queue-deadline
@@ -776,7 +835,8 @@ def record_ongoing_live_streamlink(
     elif _streamlink_supports("--hls-segment-queue-threshold"):
         cmd[1:1] = ["--hls-segment-queue-threshold", "15"]
 
-    console.print(f"  [Live Record] Streamlink quality={quality}")
+    _append_streamlink_command_log(cmd)
+    console.print(f"  [Live Record] Streamlink quality={quality} → {out_fmt.upper()}")
     try:
         res = subprocess.run(cmd)
         if res.returncode != 0 or not temp_path.exists():
@@ -785,23 +845,32 @@ def record_ongoing_live_streamlink(
         console.print(f"  [Live Record Error] Streamlink failed: {e}")
         return None
 
-    # Remux into a proper MKV so mkvpropedit works reliably.
     ffmpeg = BINARIES.get("ffmpeg", "ffmpeg")
-    remux_tmp = output_path.with_name(f"{output_path.stem}.tmp.mkv")
-    cmd_remux = [ffmpeg, "-y", "-i", str(temp_path), "-c", "copy", "-f", "matroska", str(remux_tmp)]
+    remux_tmp = final_path.with_name(f"{final_path.stem}.tmp.{out_fmt}")
+    if out_fmt == "mp4":
+        cmd_remux = [
+            ffmpeg, "-y", "-i", str(temp_path), "-map", "0", "-c", "copy",
+            "-movflags", "+faststart", "-f", "mp4", str(remux_tmp),
+        ]
+    else:
+        # Let the .mkv suffix pick the Matroska muxer; explicit -f matroska can fail on some TS streams.
+        cmd_remux = [
+            ffmpeg, "-y", "-i", str(temp_path), "-map", "0", "-c", "copy",
+            "-avoid_negative_ts", "make_zero", str(remux_tmp),
+        ]
     try:
         r2 = subprocess.run(cmd_remux, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r2.returncode != 0 or not remux_tmp.exists():
             console.print(f"  [Live Record Error] FFmpeg remux failed: {(r2.stderr or '')[:300]}")
             return None
-        if output_path.exists():
-            output_path.unlink()
-        remux_tmp.rename(output_path)
+        if final_path.exists():
+            final_path.unlink()
+        remux_tmp.rename(final_path)
         try:
             temp_path.unlink()
         except Exception:
             pass
-        return output_path
+        return final_path
     except Exception as e:
         console.print(f"  [Live Record Error] Remux error: {e}")
         return None
@@ -832,7 +901,7 @@ def download_ongoing_live_subtitles_nm3u8dlre(
         "--save-dir",
         str(output_dir),
         "--save-name",
-        f"{save_name}_subs",
+        save_name,
         "-ss",
         f'lang="{subtitle_langs}":for=all',
         "--thread-count",
