@@ -13,7 +13,7 @@ This project is based on [Weverse Archive](https://github.com/honeyedoasis/Wever
 - **Python 3.9+** (uses `zoneinfo` in the standard library)
 - **PyPI dependencies** — see [`requirements.txt`](requirements.txt)
 - **External programs** (install separately and/or set full paths in `config.yaml`):
-  - [FFmpeg](https://ffmpeg.org/)
+  - [FFmpeg](https://ffmpeg.org/) (and **ffprobe**, usually in the same install — used for mux/remux progress)
   - [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE) (DRM and HLS)
   - [mkvpropedit](https://mkvtoolnix.download/) (MKV metadata, when used)
   - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — often installed via pip; can also be a standalone binary referenced in config
@@ -97,7 +97,7 @@ python archiverse.py -c fromis9
 
 ### Ongoing (on-air) live recording
 
-Poll Weverse for currently live streams and record with N_m3u8DL-RE:
+Poll Weverse for currently live streams and record with **Streamlink** (then remux with FFmpeg). Subtitles after the fact can use N_m3u8DL-RE:
 
 ```bash
 python archiverse.py -c fromis9 --ongoing-live-monitor
@@ -110,7 +110,7 @@ python archiverse.py -c fromis9 --ongoing-live-now
 python archiverse.py -c fromis9 --ongoing-live-now "4-1234567890"
 ```
 
-Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv`.
+Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking).
 
 For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so access tokens can be refreshed (see `weverse_auth.py`).
 
@@ -119,8 +119,6 @@ For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so 
 - **`--no-history`** — do not read or update `downloaded.json` for this run
 - **`--skip-membership` / `--skip-public`** — filter by visibility
 - **`-id` / `--community_ids`** — supply community IDs if slug lookup fails (same order as `-c`)
-- **`--ongoing-live-monitor-no-prompt`** — skips prompting the user to keep monitoring lives or not
-
 ---
 
 ## Configuration highlights
@@ -135,7 +133,7 @@ For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so 
 | `filename_templates` / `date_format` | How files are named |
 | `menu_communities` / `menu_community_ids` | Interactive picker and ID overrides |
 | `official_channels` / `former_members` | Extra menu entries per community slug |
-| `binaries` | Paths to `ffmpeg`, `N_m3u8DL-RE`, etc. |
+| `binaries` | Paths to `ffmpeg`, `ffprobe`, `streamlink`, `N_m3u8DL-RE`, etc. |
 
 Timezone for filenames and text headers is controlled by **`timezone`** (IANA name, e.g. `Asia/Seoul`). A reference list: [tz database time zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 
