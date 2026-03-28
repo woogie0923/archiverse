@@ -14,7 +14,7 @@ auth_token: ""
 # Leave empty to use auth_token only.
 weverse_refresh_token: ""
 
-# Communities for the picker when you run: python wv-archive.py (no -c).
+# Communities for the picker when you run: python archiverse.py (no -c).
 menu_communities:
   - example-community-slug
 
@@ -24,7 +24,7 @@ menu_communities:
 
 # Widevine device file (.wvd) for DRM decryption.
 # Windows: "D:/path/to/WVD_1.wvd"
-# macOS/Linux: "/home/you/.local/share/wv-archive/WVD_1.wvd"
+# macOS/Linux: "/home/you/.local/share/archiverse/WVD_1.wvd"
 wvd_device_path: ""
 
 binaries:
