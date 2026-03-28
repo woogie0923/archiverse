@@ -31,8 +31,8 @@ Use this software only in line with Weverse’s terms of service and applicable 
 ## Installation
 
 ```bash
-git clone https://github.com/woogie0923/archiverse.git wv-archive
-cd wv-archive
+git clone https://github.com/woogie0923/archiverse.git archiverse
+cd archiverse
 python -m venv .venv
 ```
 
@@ -64,7 +64,7 @@ Edit **`config.yaml`**: set `auth_token`, `wvd_device_path`, `base_dir`, `menu_c
 Show full help:
 
 ```bash
-python wv-archive.py --help
+python archiverse.py --help
 ```
 
 ### Interactive mode (no action flags)
@@ -72,42 +72,42 @@ python wv-archive.py --help
 If `menu_communities` is set in `config.yaml`, you can run:
 
 ```bash
-python wv-archive.py
+python archiverse.py
 ```
 
 You will get a community picker and then the main menu.
 
 ```bash
-python wv-archive.py -c fromis9
+python archiverse.py -c fromis9
 ```
 
 ### Non-interactive examples (action flags require `-c`)
 
 | Goal | Example |
 |------|---------|
-| Debug API URLs | `python wv-archive.py -c fromis9 --debug` |
-| All artists: profiles | `python wv-archive.py -c STAYC -a all --profile` |
-| Selected artists: moments | `python wv-archive.py -c RedVelvet -a IRENE SEULGI --moments` |
-| Live menu or direct live ID | `python wv-archive.py -c Apink --live` / `python wv-archive.py -c fromis9 --live 4-12345678` |
-| Artist posts, photos only | `python wv-archive.py -c fromis9 -a "SONG HA YOUNG" --artist --type photo` |
-| Official channel by member ID | `python wv-archive.py -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673` |
-| Official media tab | `python wv-archive.py -c aespa --media` / `python wv-archive.py -c aespa --media 4-223153860` |
-| Official media browser | `python wv-archive.py -c APINK --media-menu` |
-| Text + comments only | `python wv-archive.py -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public` |
+| Debug API URLs | `python archiverse.py -c fromis9 --debug` |
+| All artists: profiles | `python archiverse.py -c STAYC -a all --profile` |
+| Selected artists: moments | `python archiverse.py -c RedVelvet -a IRENE SEULGI --moments` |
+| Live menu or direct live ID | `python archiverse.py -c Apink --live` / `python archiverse.py -c fromis9 --live 4-12345678` |
+| Artist posts, photos only | `python archiverse.py -c fromis9 -a "SONG HA YOUNG" --artist --type photo` |
+| Official channel by member ID | `python archiverse.py -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673` |
+| Official media tab | `python archiverse.py -c aespa --media` / `python archiverse.py -c aespa --media 4-223153860` |
+| Official media browser | `python archiverse.py -c APINK --media-menu` |
+| Text + comments only | `python archiverse.py -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public` |
 
 ### Ongoing (on-air) live recording
 
 Poll Weverse for currently live streams and record with N_m3u8DL-RE:
 
 ```bash
-python wv-archive.py -c fromis9 --ongoing-live-monitor
+python archiverse.py -c fromis9 --ongoing-live-monitor
 ```
 
 Record what is on air once (optional match string for post / video / URL):
 
 ```bash
-python wv-archive.py -c fromis9 --ongoing-live-now
-python wv-archive.py -c fromis9 --ongoing-live-now "4-1234567890"
+python archiverse.py -c fromis9 --ongoing-live-now
+python archiverse.py -c fromis9 --ongoing-live-now "4-1234567890"
 ```
 
 Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv`.
@@ -153,7 +153,7 @@ Timezone for filenames and text headers is controlled by **`timezone`** (IANA na
 
 | Path | Role |
 |------|------|
-| `wv-archive.py` | CLI entry point |
+| `archiverse.py` | CLI entry point |
 | `config.yaml` | Your local configuration (not in template) |
 | `config.yaml.template` | Safe template for new setups |
 | `interactive_menu.py` / `live.py` | TUI menus and live flows |
