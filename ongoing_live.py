@@ -25,6 +25,122 @@ from helpers import get_author_name, make_filename, sanitise, mux_subtitles_into
 from utils import console, edit_creation_date
 
 
+def select_ongoing_live_options() -> dict | str | None:
+    """
+    Interactive settings menu for ongoing lives.
+
+    Returns:
+      - dict of options when confirmed
+      - "back" when user cancels
+      - "quit" when user requests program exit
+    """
+    from terminal_input import get_key
+    from rich.table import Table
+    from rich.text import Text
+
+    from menu_rich import clear_menu_screen
+
+    download_only = "both"   # both|video|subs
+    mux_subs = False
+    poll_seconds = 30
+    subtitle_langs = "eng|kor"  # eng|kor|eng|kor|none
+    output_format = "mp4"
+    record_all = False
+
+    download_opts = ["both", "video", "subs"]
+    poll_opts = [10, 30, 60]
+    subs_opts = ["eng|kor", "eng", "kor", "none"]
+    fmt_opts = ["mp4", "mkv"]
+
+    options: list[tuple[str, str]] = [
+        ("Download only", "download_only"),
+        ("Poll seconds", "poll_seconds"),
+        ("Subtitle langs", "subtitle_langs"),
+        ("Output format", "output_format"),
+        ("Mux subs into video", "mux_subs"),
+        ("Record all on-air lives", "record_all"),
+    ]
+
+    cursor = 0
+    while True:
+        clear_menu_screen()
+
+        console.print(Text("══ Ongoing Lives Settings ══", style="bold"))
+        console.print("  [↑ ↓] move   [Space] toggle/cycle   [Enter] start\n  [B] back   [Q] quit")
+        console.rule(style="dim")
+
+        table = Table(show_header=False, show_edge=False, box=None, pad_edge=False)
+        table.add_column("Sel", justify="right", no_wrap=True, width=3)
+        table.add_column("Option", overflow="ellipsis", no_wrap=True)
+        table.add_column("Value", overflow="ellipsis", no_wrap=True)
+
+        for i, (label, key) in enumerate(options):
+            is_cur = i == cursor
+            st = "reverse bold" if is_cur else ""
+            prefix = "►" if is_cur else " "
+
+            if key == "download_only":
+                val = download_only
+            elif key == "poll_seconds":
+                val = str(poll_seconds)
+            elif key == "subtitle_langs":
+                val = subtitle_langs
+            elif key == "output_format":
+                val = output_format
+            elif key == "mux_subs":
+                val = "yes" if mux_subs else "no"
+            elif key == "record_all":
+                val = "yes" if record_all else "no"
+            else:
+                val = "?"
+
+            table.add_row(
+                Text(prefix, style=st),
+                Text(label, style=st),
+                Text(val, style=st),
+            )
+
+        console.print(table)
+        console.rule(style="dim")
+
+        k = get_key()
+        if k == "up":
+            cursor = max(0, cursor - 1)
+        elif k == "down":
+            cursor = min(len(options) - 1, cursor + 1)
+        elif k == "space":
+            key = options[cursor][1]
+            if key == "download_only":
+                idx = download_opts.index(download_only) if download_only in download_opts else 0
+                download_only = download_opts[(idx + 1) % len(download_opts)]
+            elif key == "poll_seconds":
+                idx = poll_opts.index(poll_seconds) if poll_seconds in poll_opts else 1
+                poll_seconds = poll_opts[(idx + 1) % len(poll_opts)]
+            elif key == "subtitle_langs":
+                idx = subs_opts.index(subtitle_langs) if subtitle_langs in subs_opts else 0
+                subtitle_langs = subs_opts[(idx + 1) % len(subs_opts)]
+            elif key == "output_format":
+                idx = fmt_opts.index(output_format) if output_format in fmt_opts else 0
+                output_format = fmt_opts[(idx + 1) % len(fmt_opts)]
+            elif key == "mux_subs":
+                mux_subs = not mux_subs
+            elif key == "record_all":
+                record_all = not record_all
+        elif k in ("s", "enter"):
+            return {
+                "download_only": download_only,
+                "mux_subs": mux_subs,
+                "poll_seconds": poll_seconds,
+                "subtitle_langs": subtitle_langs,
+                "output_format": output_format,
+                "record_all": record_all,
+            }
+        elif k in ("b", "back"):
+            return "back"
+        elif k in ("q", "quit"):
+            return "quit"
+
+
 def _parse_published_at(published_at) -> datetime | None:
     """
     Parse publishedAt values from liveTab into a datetime.
@@ -299,9 +415,13 @@ def _record_one(file_info: dict, poll_conf: dict):
 
     # Mark recorded so we don't start again on next poll:
     # - mark only when requested parts succeeded
+    # - if wants_subs=True but subs_lang == "none", no subtitle download was
+    #   requested, so do not require subtitle success to consider the video
+    #   part successful (but also don't mark "subs-only" downloads as done).
+    subs_needed = wants_subs and subs_requested
     mark_ok = (
         (not wants_video or video_ok)
-        and (not wants_subs or subs_ok)
+        and (not subs_needed or subs_ok)
         and (not mux_effective or mux_ok)
     )
     if mark_ok:

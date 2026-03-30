@@ -147,20 +147,6 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         ("item", "media_menu", "Media Categories"),
         ("item", "live", "Lives"),
         ("item", "ongoing_live", "Ongoing Lives"),
-        ("cfg_mode", "ongoing_dl_both", "Ongoing Live Download: Both"),
-        ("cfg_mode", "ongoing_dl_video", "Ongoing Live Download: Video only"),
-        ("cfg_mode", "ongoing_dl_subs", "Ongoing Live Download: Subs only"),
-        ("cfg_mode", "ongoing_poll_10", "Ongoing Live Poll: 10s"),
-        ("cfg_mode", "ongoing_poll_30", "Ongoing Live Poll: 30s"),
-        ("cfg_mode", "ongoing_poll_60", "Ongoing Live Poll: 60s"),
-        ("cfg_mode", "ongoing_subs_eng_kor", "Ongoing Live Subs: eng|kor"),
-        ("cfg_mode", "ongoing_subs_eng", "Ongoing Live Subs: eng"),
-        ("cfg_mode", "ongoing_subs_kor", "Ongoing Live Subs: kor"),
-        ("cfg_mode", "ongoing_subs_none", "Ongoing Live Subs: none"),
-        ("cfg_mode", "ongoing_fmt_mp4", "Ongoing Live Output: mp4"),
-        ("cfg_mode", "ongoing_fmt_mkv", "Ongoing Live Output: mkv"),
-        ("cfg_bool", "ongoing_mux_subs", "Mux subs into video after download"),
-        ("cfg_bool", "ongoing_record_all", "Record all on-air lives"),
     ]
     _action_keys = [
         k for t, k, _ in ARCHIVE_LAYOUT + ACTIONS_TOOL_LAYOUT
@@ -179,13 +165,6 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
     artist_sel  = [False] * len(artist_profiles)
     channel_sel = [False] * len(official_channels)
     action_sel  = {k: False for k in _action_keys}
-
-    ongoing_live_download_only = "both"
-    ongoing_live_mux_subs = False
-    ongoing_live_poll_seconds = 30
-    ongoing_live_subtitle_langs = "eng|kor"
-    ongoing_live_output_format = "mp4"
-    ongoing_live_record_all = False
 
     # ── Load persisted menu state ─────────────────────────────────────────
     def _menu_state_path() -> Path:
@@ -606,41 +585,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
             row_kind, key, label = ACTIONS_TOOL_LAYOUT[j + 1]
             is_cur = active_at and cursor == j
             st = "reverse bold" if is_cur else ""
-            checked = False
-            if row_kind == "item":
-                checked = bool(action_sel.get(key))
-            elif row_kind == "cfg_mode":
-                if key.startswith("ongoing_dl_"):
-                    mode_map = {
-                        "ongoing_dl_both": "both",
-                        "ongoing_dl_video": "video",
-                        "ongoing_dl_subs": "subs",
-                    }
-                    checked = ongoing_live_download_only == mode_map.get(key)
-                elif key.startswith("ongoing_poll_"):
-                    try:
-                        checked = ongoing_live_poll_seconds == int(key.rsplit("_", 1)[1])
-                    except Exception:
-                        checked = False
-                elif key.startswith("ongoing_subs_"):
-                    subs_map = {
-                        "ongoing_subs_eng_kor": "eng|kor",
-                        "ongoing_subs_eng": "eng",
-                        "ongoing_subs_kor": "kor",
-                        "ongoing_subs_none": "none",
-                    }
-                    checked = ongoing_live_subtitle_langs == subs_map.get(key)
-                elif key.startswith("ongoing_fmt_"):
-                    fmt_map = {
-                        "ongoing_fmt_mp4": "mp4",
-                        "ongoing_fmt_mkv": "mkv",
-                    }
-                    checked = ongoing_live_output_format == fmt_map.get(key)
-            elif row_kind == "cfg_bool":
-                if key == "ongoing_mux_subs":
-                    checked = bool(ongoing_live_mux_subs)
-                elif key == "ongoing_record_all":
-                    checked = bool(ongoing_live_record_all)
+            checked = bool(action_sel.get(key))
             chk = "[X]" if checked else "[ ]"
             actions_tool_table.add_row(Text(chk, style=st), Text(escape(label), style=st))
 
@@ -761,38 +706,6 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
                         rk, ak, _ = ACTIONS_TOOL_LAYOUT[cursor + 1]
                         if rk == "item" and ak:
                             action_sel[ak] = not action_sel[ak]
-                        elif rk == "cfg_mode" and ak:
-                            if ak.startswith("ongoing_dl_"):
-                                mode_map = {
-                                    "ongoing_dl_both": "both",
-                                    "ongoing_dl_video": "video",
-                                    "ongoing_dl_subs": "subs",
-                                }
-                                ongoing_live_download_only = mode_map.get(ak, ongoing_live_download_only)
-                            elif ak.startswith("ongoing_poll_"):
-                                try:
-                                    ongoing_live_poll_seconds = int(ak.rsplit("_", 1)[1])
-                                except Exception:
-                                    pass
-                            elif ak.startswith("ongoing_subs_"):
-                                subs_map = {
-                                    "ongoing_subs_eng_kor": "eng|kor",
-                                    "ongoing_subs_eng": "eng",
-                                    "ongoing_subs_kor": "kor",
-                                    "ongoing_subs_none": "none",
-                                }
-                                ongoing_live_subtitle_langs = subs_map.get(ak, ongoing_live_subtitle_langs)
-                            elif ak.startswith("ongoing_fmt_"):
-                                fmt_map = {
-                                    "ongoing_fmt_mp4": "mp4",
-                                    "ongoing_fmt_mkv": "mkv",
-                                }
-                                ongoing_live_output_format = fmt_map.get(ak, ongoing_live_output_format)
-                        elif rk == "cfg_bool" and ak:
-                            if ak == "ongoing_mux_subs":
-                                ongoing_live_mux_subs = not ongoing_live_mux_subs
-                            elif ak == "ongoing_record_all":
-                                ongoing_live_record_all = not ongoing_live_record_all
                 elif key == "a":
                     if section == SECTION_ARTISTS and artist_profiles:
                         v = not all(artist_sel)
@@ -840,10 +753,4 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         "artists":  None if (no_selection or all_selected) else chosen_artist_names,
         "channels": chosen_channel_ids,
         "actions":  chosen_action_keys,
-        "ongoing_live_download_only": ongoing_live_download_only,
-        "ongoing_live_mux_subs": ongoing_live_mux_subs,
-        "ongoing_live_poll_seconds": ongoing_live_poll_seconds,
-        "ongoing_live_subtitle_langs": ongoing_live_subtitle_langs,
-        "ongoing_live_output_format": ongoing_live_output_format,
-        "ongoing_live_record_all": ongoing_live_record_all,
     }, None

@@ -9,7 +9,7 @@ import state
 from utils import console
 from api import make_extractor, run_extr, print_status_board
 from live import process_lives
-from ongoing_live import process_ongoing_lives
+from ongoing_live import process_ongoing_lives, select_ongoing_live_options
 from text_writer import save_post_text, embed_url_metadata  # noqa
 from processors import (
     process_moments,
@@ -350,16 +350,24 @@ Folder structure is configurable in config.yaml.
                 elif action_key == "live":
                     result = process_lives(debug=args.debug)
                 elif action_key == "ongoing_live":
-                    process_ongoing_lives(
-                        direct_match=None,
-                        poll_seconds=menu_result.get("ongoing_live_poll_seconds", args.ongoing_live_poll),
-                        record_all=bool(menu_result.get("ongoing_live_record_all", args.ongoing_live_record_all)),
-                        subtitle_langs=menu_result.get("ongoing_live_subtitle_langs", args.ongoing_live_subs),
-                        output_format=menu_result.get("ongoing_live_output_format", args.ongoing_live_output_format),
-                        download_only=menu_result.get("ongoing_live_download_only", "both"),
-                        mux_subs=bool(menu_result.get("ongoing_live_mux_subs", False)),
-                        skip_monitor_prompt=args.ongoing_live_monitor_no_prompt,
-                    )
+                    sel = select_ongoing_live_options()
+                    if sel == "back":
+                        back_to_menu = True
+                        break
+                    if sel == "quit":
+                        quit_program = True
+                        break
+                    if isinstance(sel, dict):
+                        process_ongoing_lives(
+                            direct_match=None,
+                            poll_seconds=sel.get("poll_seconds", args.ongoing_live_poll),
+                            record_all=sel.get("record_all", args.ongoing_live_record_all),
+                            subtitle_langs=sel.get("subtitle_langs", args.ongoing_live_subs),
+                            output_format=sel.get("output_format", args.ongoing_live_output_format),
+                            download_only=sel.get("download_only", "both"),
+                            mux_subs=sel.get("mux_subs", False),
+                            skip_monitor_prompt=args.ongoing_live_monitor_no_prompt,
+                        )
                     result = None
                 elif action_key == "media":
                     result = process_official_media()
