@@ -2,8 +2,17 @@
 
 All notable changes to this project are recorded here. The history below follows the repository from the first commit; related doc-only or merge commits are summarized together.
 
+## Unreleased
+
+### Added
+
+- **Ongoing lives controls**: `--ongoing-live-download-only {both,video,subs}` and `--ongoing-live-mux-subs` (plus matching interactive menu toggles for poll interval, subtitles, output format, and record-all).
+- **Main menu history toggle** — filters can disable reading/updating `downloaded.json` for the run (via `--no-history` behavior).
+
 ### Fixed
 
+- **Ongoing lives MKV remux** — map only v/a/sub streams when remuxing TS recordings into Matroska to avoid Matroska header/codec-parameter failures.
+- **`downloaded.json` correctness across downloads** — only record a post as downloaded after the requested downloads/muxing succeed (covers ongoing lives, feed archivers in `processors.py`, and official media in `official_media.py` / `official_media_menu.py`).
 - **Saved post text (`.txt`)** — decode HTML/XML character references (`&gt;`, `&lt;`, `&amp;`, etc.) and strip WordprocessingML fragments (`<w:…>`, `</w:…>`) from post and comment bodies in `text_writer.py`.
 
 ---

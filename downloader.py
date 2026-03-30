@@ -853,10 +853,26 @@ def record_ongoing_live_streamlink(
             "-movflags", "+faststart", "-f", "mp4", str(remux_tmp),
         ]
     else:
-        # Let the .mkv suffix pick the Matroska muxer; explicit -f matroska can fail on some TS streams.
+        # Matroska remux: TS recordings may contain "data" streams that Matroska
+        # rejects. Map only v/a/sub streams to keep remux robust.
         cmd_remux = [
-            ffmpeg, "-y", "-i", str(temp_path), "-map", "0", "-c", "copy",
-            "-avoid_negative_ts", "make_zero", str(remux_tmp),
+            ffmpeg,
+            "-y",
+            "-i",
+            str(temp_path),
+            "-map",
+            "0:v:0?",
+            "-map",
+            "0:a?",
+            "-map",
+            "0:s?",
+            "-c",
+            "copy",
+            "-avoid_negative_ts",
+            "make_zero",
+            "-f",
+            "matroska",
+            str(remux_tmp),
         ]
     try:
         rc, remux_err = utils.run_ffmpeg_with_progress(

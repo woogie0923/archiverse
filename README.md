@@ -110,13 +110,14 @@ python archiverse.py -c fromis9 --ongoing-live-now
 python archiverse.py -c fromis9 --ongoing-live-now "4-1234567890"
 ```
 
-Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking).
+Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-download-only {both,video,subs}`, `--ongoing-live-mux-subs` (embed downloaded subtitles into the recorded video container), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking).
+In interactive mode, these same ongoing-live options can be configured under the **Actions** block.
 
 For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so access tokens can be refreshed (see `weverse_auth.py`).
 
 ### Other useful flags
 
-- **`--no-history`** — do not read or update `downloaded.json` for this run
+- **`--no-history`** — do not read or update `downloaded.json` for this run (also available as a History/No history toggle in the interactive menu Filters)
 - **`--skip-membership` / `--skip-public`** — filter by visibility
 - **`-id` / `--community_ids`** — supply community IDs if slug lookup fails (same order as `-c`)
 ---

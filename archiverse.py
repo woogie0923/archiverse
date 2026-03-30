@@ -101,6 +101,17 @@ Folder structure is configurable in config.yaml.
         help="Container after Streamlink + FFmpeg remux (ongoing lives). Default: mp4. "
              "Use the flag alone to keep the default.",
     )
+    g_action.add_argument(
+        "--ongoing-live-download-only",
+        choices=["both", "video", "subs"],
+        default="both",
+        help="For --ongoing-live-monitor/--ongoing-live-now: download only video, only subtitles, or both.",
+    )
+    g_action.add_argument(
+        "--ongoing-live-mux-subs",
+        action="store_true",
+        help="When downloading subtitles for ongoing lives, mux/embed them into the recorded video container after download.",
+    )
     g_action.add_argument("--moments", nargs="?", const=True, metavar="POST_ID",
                           help="Archive Artist Moments. Provide a Post ID for a specific moment.")
     g_action.add_argument("--post", metavar="POST_ID",
@@ -229,6 +240,8 @@ Folder structure is configurable in config.yaml.
                     subtitle_langs=args.ongoing_live_subs,
                     output_format=args.ongoing_live_output_format,
                     skip_monitor_prompt=args.ongoing_live_monitor_no_prompt,
+                    download_only=args.ongoing_live_download_only,
+                    mux_subs=args.ongoing_live_mux_subs,
                 )
             elif args.ongoing_live_now:
                 process_ongoing_lives(
@@ -237,6 +250,8 @@ Folder structure is configurable in config.yaml.
                     record_all=args.ongoing_live_record_all,
                     subtitle_langs=args.ongoing_live_subs,
                     output_format=args.ongoing_live_output_format,
+                    download_only=args.ongoing_live_download_only,
+                    mux_subs=args.ongoing_live_mux_subs,
                 )
 
             if args.moments:
@@ -337,10 +352,13 @@ Folder structure is configurable in config.yaml.
                 elif action_key == "ongoing_live":
                     process_ongoing_lives(
                         direct_match=None,
-                        poll_seconds=args.ongoing_live_poll,
-                        record_all=args.ongoing_live_record_all,
-                        subtitle_langs=args.ongoing_live_subs,
-                        output_format=args.ongoing_live_output_format,
+                        poll_seconds=menu_result.get("ongoing_live_poll_seconds", args.ongoing_live_poll),
+                        record_all=bool(menu_result.get("ongoing_live_record_all", args.ongoing_live_record_all)),
+                        subtitle_langs=menu_result.get("ongoing_live_subtitle_langs", args.ongoing_live_subs),
+                        output_format=menu_result.get("ongoing_live_output_format", args.ongoing_live_output_format),
+                        download_only=menu_result.get("ongoing_live_download_only", "both"),
+                        mux_subs=bool(menu_result.get("ongoing_live_mux_subs", False)),
+                        skip_monitor_prompt=args.ongoing_live_monitor_no_prompt,
                     )
                     result = None
                 elif action_key == "media":

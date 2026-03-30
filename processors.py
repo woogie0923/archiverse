@@ -100,16 +100,21 @@ def process_single_post(post_id: str):
             if state.SAVE_TEXT:
                 txt_stem = make_filename(clean_name, date, post_id, title="", template_key="artist_posts", tier=tier)
                 save_post_text(full_post, artist_dir, txt_stem, weverse_url=_post_url, fetch_artist_comments=True)
-                mark_downloaded(post_id)
+                txt_path = Path(artist_dir) / f"{txt_stem}.txt"
+                if txt_path.exists():
+                    mark_downloaded(post_id)
             return
 
+        found_any = False
         if not state.TEXT_ONLY:
             if state.DOWNLOAD_TYPE != "video":
                 for pid, photo in photos.items():
                     filename = make_filename(clean_name, date, f"{post_id}_{pid}", title="", template_key="artist_posts", tier=tier)
                     path = f"{artist_dir}/{filename}"
                     if not is_already_downloaded(path, post_id=post_id):
-                        utils.download_file(photo["url"], path, date)
+                        ok = utils.download_file(photo["url"], path, date)
+                        if ok:
+                            found_any = True
                         embed_url_metadata(path, _post_url)
             if state.DOWNLOAD_TYPE != "photo":
                 for vid, video_data in videos.items():
@@ -119,13 +124,19 @@ def process_single_post(post_id: str):
                         download_cvideo(vid, path, date)
                         embed_url_metadata(path, _post_url)
                         _av = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
-                        if _av: utils.edit_creation_date(str(_av), date)
+                        if _av:
+                            found_any = True
+                            utils.edit_creation_date(str(_av), date)
 
         if state.SAVE_TEXT:
             txt_stem = make_filename(clean_name, date, post_id, title="", template_key="artist_posts", tier=tier)
             save_post_text(full_post, artist_dir, txt_stem, weverse_url=_post_url, fetch_artist_comments=True)
+            txt_path = Path(artist_dir) / f"{txt_stem}.txt"
+            if txt_path.exists():
+                found_any = True
 
-        mark_downloaded(post_id)
+        if found_any:
+            mark_downloaded(post_id)
 
 
 def _process_single_official_post(full_post: dict):
@@ -141,6 +152,7 @@ def _process_single_official_post(full_post: dict):
 
     console.print(f"  -> Official channel: {channel_name}")
 
+    found_any = False
     if not state.TEXT_ONLY:
         if state.DOWNLOAD_TYPE != "video":
             for pid, photo in photos.items():
@@ -148,7 +160,9 @@ def _process_single_official_post(full_post: dict):
                 path = get_folder("official_channel", community=state.COMMUNITY_NAME, channel=channel_name) + f"/{filename}"
                 if not is_already_downloaded(path, post_id=post_id):
                     os.makedirs(os.path.dirname(path), exist_ok=True)
-                    utils.download_file(photo["url"], path, date)
+                    ok = utils.download_file(photo["url"], path, date)
+                    if ok:
+                        found_any = True
                     embed_url_metadata(path, _off_url)
         if state.DOWNLOAD_TYPE != "photo":
             for wv_vid_id, video_entry in videos.items():
@@ -159,7 +173,9 @@ def _process_single_official_post(full_post: dict):
                     url = get_official_video_url(wv_vid_id, naver_id)
                     if url:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
-                        utils.download_file(url, path, date)
+                        ok = utils.download_file(url, path, date)
+                        if ok:
+                            found_any = True
                         embed_url_metadata(path, _off_url)
 
     if state.SAVE_TEXT:
@@ -167,7 +183,12 @@ def _process_single_official_post(full_post: dict):
         _off_stem = make_filename(channel_name, date, post_id, title="", template_key="official_posts", tier="Public")
         save_post_text(full_post, _off_dir, _off_stem, weverse_url=_off_url, fetch_artist_comments=False)
 
-    mark_downloaded(post_id)
+        txt_path = Path(_off_dir) / f"{_off_stem}.txt"
+        if txt_path.exists():
+            found_any = True
+
+    if found_any:
+        mark_downloaded(post_id)
 
 
 def process_moments(direct_id=None):
@@ -196,6 +217,7 @@ def process_moments(direct_id=None):
 
         filename = make_filename(member_name, date, m["postId"], title="", template_key="moments", tier=tier)
         path     = f"{moment_dir}/{filename}"
+        found_any = False
 
         if is_already_downloaded(path, post_id=m["postId"]):
             return
@@ -218,13 +240,17 @@ def process_moments(direct_id=None):
         
         if not state.TEXT_ONLY:
             if state.DOWNLOAD_TYPE != "video" and photo_url:
-                utils.download_file(photo_url, path, date)
+                ok = utils.download_file(photo_url, path, date)
+                if ok:
+                    found_any = True
                 embed_url_metadata(path, _moment_url)
             elif state.DOWNLOAD_TYPE != "photo" and video_id:
                 download_cvideo(video_id, path, date)
                 embed_url_metadata(path, _moment_url)
                 _mv = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
-                if _mv: utils.edit_creation_date(str(_mv), date)
+                if _mv:
+                    found_any = True
+                    utils.edit_creation_date(str(_mv), date)
 
         if state.SAVE_TEXT:
             save_post_text(m, os.path.dirname(path),
@@ -232,8 +258,12 @@ def process_moments(direct_id=None):
                            weverse_url=_moment_url,
                            fetch_artist_comments=True,
                            force_comments=True)
+            txt_path = Path(moment_dir) / f"{os.path.basename(path)}.txt"
+            if txt_path.exists():
+                found_any = True
 
-        mark_downloaded(m["postId"])
+        if found_any:
+            mark_downloaded(m["postId"])
 
     if direct_id:
         console.print(f"\n[Moment] Fetching specific Moment ID: {direct_id}")
@@ -316,15 +346,17 @@ def process_moments(direct_id=None):
                 found_content = False
                 if not state.TEXT_ONLY:
                     if state.DOWNLOAD_TYPE != "video" and photo_url:
-                        utils.download_file(photo_url, path, date)
-                        embed_url_metadata(path, _moment_url)
-                        found_content = True
+                        ok = utils.download_file(photo_url, path, date)
+                        if ok:
+                            embed_url_metadata(path, _moment_url)
+                            found_content = True
                     elif state.DOWNLOAD_TYPE != "photo" and video_id:
                         download_cvideo(video_id, path, date)
                         embed_url_metadata(path, _moment_url)
                         _mv2 = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
-                        if _mv2: utils.edit_creation_date(str(_mv2), date)
-                        found_content = True
+                        if _mv2:
+                            utils.edit_creation_date(str(_mv2), date)
+                            found_content = True
 
                 if state.SAVE_TEXT:
                     save_post_text(m, moment_dir,
@@ -332,6 +364,9 @@ def process_moments(direct_id=None):
                                    weverse_url=_moment_url,
                                    fetch_artist_comments=True,
                                    force_comments=True)
+                    txt_path = Path(moment_dir) / f"{os.path.basename(path)}.txt"
+                    if txt_path.exists():
+                        found_content = True
 
                 if found_content:
                     consecutive_no_new = 0
@@ -419,7 +454,9 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
                     save_post_text(full_post, artist_dir, txt_stem,
                                    weverse_url=_post_url,
                                    fetch_artist_comments=True)
-                mark_downloaded(post_id)
+                    txt_path = Path(artist_dir) / f"{txt_stem}.txt"
+                    if txt_path.exists():
+                        mark_downloaded(post_id)
                 continue
 
             found_new = False
@@ -431,9 +468,10 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
                         filename = make_filename(clean_member_name, date, f"{post_id}_{pid}", title="", template_key="artist_posts", tier=tier)
                         path     = f"{artist_dir}/{filename}"
                         if not is_already_downloaded(path, post_id=post_id):
-                            utils.download_file(photo["url"], path, date)
-                            embed_url_metadata(path, _post_url)
-                            found_new = True
+                            ok = utils.download_file(photo["url"], path, date)
+                            if ok:
+                                embed_url_metadata(path, _post_url)
+                                found_new = True
 
                 if state.DOWNLOAD_TYPE != "photo":
                     for vid, video_data in videos.items():
@@ -443,22 +481,22 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
                             download_cvideo(vid, path, date)
                             embed_url_metadata(path, _post_url)
                             _av = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
-                            if _av: utils.edit_creation_date(str(_av), date)
-                            found_new = True
+                            if _av:
+                                utils.edit_creation_date(str(_av), date)
+                                found_new = True
 
             if state.SAVE_TEXT:
                 txt_stem = make_filename(clean_member_name, date, post_id, title="", template_key="artist_posts", tier=tier)
                 save_post_text(full_post, artist_dir, txt_stem,
                                weverse_url=_post_url,
                                fetch_artist_comments=True)
-                if state.TEXT_ONLY and (Path(artist_dir) / f"{txt_stem}.txt").exists():
+                if (Path(artist_dir) / f"{txt_stem}.txt").exists():
                     found_new = True
 
             if found_new:
                 consecutive_no_new = 0
                 mark_downloaded(post_id)
             else:
-                mark_downloaded(post_id)
                 consecutive_no_new += 1
 
             if consecutive_no_new >= STOP_THRESHOLD:
@@ -549,7 +587,14 @@ def process_official_posts(member_ids: list):
                         _off_stem = make_filename(channel_name, date, summary["postId"], title="", template_key="official_posts", tier="Public")
                         save_post_text(full_post, _off_dir, _off_stem,
                                        weverse_url=_off_url, fetch_artist_comments=False)
-                    consecutive_no_new += 1
+                        txt_path = Path(_off_dir) / f"{_off_stem}.txt"
+                        if txt_path.exists():
+                            mark_downloaded(summary["postId"])
+                            consecutive_no_new = 0
+                        else:
+                            consecutive_no_new += 1
+                    else:
+                        consecutive_no_new += 1
                     if consecutive_no_new >= STOP_THRESHOLD:
                         break
                     continue
@@ -566,9 +611,10 @@ def process_official_posts(member_ids: list):
                         ) + f"/{filename}"
                         if not is_already_downloaded(path, post_id=summary["postId"]):
                             os.makedirs(os.path.dirname(path), exist_ok=True)
-                            utils.download_file(photo["url"], path, date)
-                            embed_url_metadata(path, _off_url)
-                            found_new = True
+                            ok = utils.download_file(photo["url"], path, date)
+                            if ok:
+                                embed_url_metadata(path, _off_url)
+                                found_new = True
                             time.sleep(DOWNLOAD_SLEEP)
 
                 # Videos (2-step neonplayer flow)
@@ -591,11 +637,13 @@ def process_official_posts(member_ids: list):
                             url = get_official_video_url(wv_vid_id, naver_id)
                             if url:
                                 os.makedirs(os.path.dirname(path), exist_ok=True)
-                                utils.download_file(url, path, date)
-                                embed_url_metadata(path, _off_url)
+                                ok = utils.download_file(url, path, date)
+                                if ok:
+                                    embed_url_metadata(path, _off_url)
                                 _oc_vf = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
-                                if _oc_vf: utils.edit_creation_date(str(_oc_vf), date)
-                                found_new = True
+                                if _oc_vf:
+                                    utils.edit_creation_date(str(_oc_vf), date)
+                                    found_new = True
                                 time.sleep(DOWNLOAD_SLEEP)
 
                 if state.SAVE_TEXT and channel_name:
@@ -604,6 +652,9 @@ def process_official_posts(member_ids: list):
                     save_post_text(full_post, _off_dir, _off_stem,
                                    weverse_url=_off_url,
                                    fetch_artist_comments=False)
+                    txt_path = Path(_off_dir) / f"{_off_stem}.txt"
+                    if txt_path.exists():
+                        found_new = True
                 if found_new:
                     consecutive_no_new = 0
                     mark_downloaded(summary["postId"])

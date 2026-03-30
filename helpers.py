@@ -334,6 +334,70 @@ def mux_media_with_subtitles(video_path: Path, sub_list: list, ffmpeg_bin: str =
     except Exception as e:
         console.print(f"  [Mux Exception] A critical error occurred: {e}")
         return None
+
+
+def mux_subtitles_into_video(
+    video_path: Path,
+    subtitle_entries: list[dict],
+    ffmpeg_bin: str = "ffmpeg",
+) -> Path | None:
+    """
+    Embed subtitle files into an existing video container (.mp4 or .mkv).
+
+    Used for optional ongoing-live subtitle muxing after Streamlink finishes.
+    """
+    if not video_path.exists():
+        console.print(f"  [Mux Error] Source video not found: {video_path}")
+        return None
+    if not subtitle_entries:
+        return None
+
+    video_abs = video_path.resolve()
+    ext = video_abs.suffix.lower()
+    subtitle_codec = "mov_text" if ext == ".mp4" else "srt"
+
+    actual_ffmpeg = shutil.which(ffmpeg_bin) or ffmpeg_bin
+    if not actual_ffmpeg:
+        console.print(
+            "  [Mux Error] FFmpeg executable not found! "
+            "Please check your system PATH or BINARIES config."
+        )
+        return None
+
+    out_tmp = video_abs.with_name(f"{video_abs.stem}.tmp{video_abs.suffix}")
+
+    cmd: list[str] = [actual_ffmpeg, "-y", "-i", str(video_abs)]
+    for sub in subtitle_entries:
+        cmd.extend(["-i", str(Path(sub["path"]).resolve())])
+
+    # Preserve AV streams, then attach each subtitle stream from each input.
+    cmd.extend(["-map", "0:v", "-map", "0:a?"])
+    for i, sub in enumerate(subtitle_entries):
+        cmd.extend(["-map", f"{i+1}:0"])
+        lang = str(sub.get("lang") or "und").split("_")[0].split("-")[0]
+        cmd.extend([f"-metadata:s:s:{i}", f"language={lang}"])
+
+    cmd.extend(["-c:v", "copy", "-c:a", "copy", "-c:s", subtitle_codec, str(out_tmp)])
+
+    rc, err = run_ffmpeg_with_progress(
+        cmd,
+        duration_source=video_abs,
+        description=f"Muxing subtitles → {video_abs.name}",
+    )
+
+    if rc == 0 and out_tmp.exists():
+        try:
+            video_abs.unlink(missing_ok=True)
+        except Exception:
+            pass
+        out_tmp.rename(video_abs)
+        return video_abs
+
+    if err:
+        console.print(f"  [FFmpeg Error] Subtitle mux failed: {err.strip()[:800]}")
+    else:
+        console.print("  [FFmpeg Error] Subtitle mux failed (no stderr captured).")
+    return None
         
         
 def sanitise(name: str) -> str:

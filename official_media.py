@@ -132,6 +132,7 @@ def process_official_media(direct_id=None):
         is_mem      = p.get("membershipOnly", False)
         author_name = get_author_name(p.get("author", {}))
         _media_url  = media_url(state.COMMUNITY_NAME, post_id)
+        found_any   = False
 
         if not thumb_url:
             thumb_url = ext_b.get("mediaInfo", {}).get("thumbnail", {}).get("url", "")
@@ -147,7 +148,20 @@ def process_official_media(direct_id=None):
                             download_cvideo(vid, path, date)
                             _embed_thumbnail(path, thumb_url, url_meta=_media_url, title=raw_t)
                             _vf = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
-                            if _vf: utils.edit_creation_date(str(_vf), date)
+                            if _vf:
+                                found_any = True
+                                utils.edit_creation_date(str(_vf), date)
+
+                        # For DRM downloads, determine success by output existence.
+                        if not found_any:
+                            _matches = [
+                                f
+                                for f in Path(path).parent.iterdir()
+                                if f.name.startswith(Path(path).name + ".")
+                                and f.suffix.lower() in (".mkv", ".mp4")
+                            ]
+                            if _matches:
+                                found_any = True
 
         if state.DOWNLOAD_TYPE != "video":
             if phs := ext_b.get("image", {}).get("photos"):
@@ -155,7 +169,9 @@ def process_official_media(direct_id=None):
                     photo_id = ph["photoId"]
                     path = f"{media_dir}/{make_filename(author_name, date, f'{post_id}_{photo_id}_{idx+1}', title=clean_t, template_key='official_media', tier='Membership' if is_mem else 'Public')}"
                     if not is_already_downloaded(path, post_id=post_id):
-                        utils.download_file(ph["url"], path, date)
+                        ok = utils.download_file(ph["url"], path, date)
+                        if ok:
+                            found_any = True
                         embed_url_metadata(path, _media_url)
 
         if state.SAVE_TEXT:
@@ -163,8 +179,11 @@ def process_official_media(direct_id=None):
             save_post_text(p, media_dir, _med_txt_stem,
                            weverse_url=_media_url,
                            fetch_artist_comments=False)
+            if (Path(media_dir) / f"{_med_txt_stem}.txt").exists():
+                found_any = True
 
-        mark_downloaded(post_id)
+        if found_any:
+            mark_downloaded(post_id)
 
     if direct_id:
         console.print(f"\n[Media] Checking specific media ID: {direct_id}")

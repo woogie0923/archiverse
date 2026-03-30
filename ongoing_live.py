@@ -21,7 +21,7 @@ from downloader import (
     record_ongoing_live_streamlink,
     download_ongoing_live_subtitles_nm3u8dlre,
 )
-from helpers import get_author_name, make_filename, sanitise
+from helpers import get_author_name, make_filename, sanitise, mux_subtitles_into_video
 from utils import console, edit_creation_date
 
 
@@ -188,20 +188,33 @@ def _record_one(file_info: dict, poll_conf: dict):
 
     created_at = _parse_published_at(file_info.get("published_at"))
 
+    download_only = str(poll_conf.get("download_only") or "both").strip().lower()
+    if download_only not in ("video", "subs", "both"):
+        download_only = "both"
+    mux_subs = bool(poll_conf.get("mux_subs", False))
+
+    wants_video = download_only in ("video", "both")
+    wants_subs = download_only in ("subs", "both")
+
     fmt = str(poll_conf.get("output_format") or "mp4").strip().lower()
     if fmt not in ("mp4", "mkv"):
         fmt = "mp4"
-    output_path = out_dir / f"{stem}.{fmt}"
-    output_file = record_ongoing_live_streamlink(
-        hls_url=hls_url, output_path=output_path
-    )
-    if not output_file or not output_file.exists():
-        return
+
+    output_file = None
+    video_ok = False
+    if wants_video:
+        output_path = out_dir / f"{stem}.{fmt}"
+        output_file = record_ongoing_live_streamlink(hls_url=hls_url, output_path=output_path)
+        video_ok = bool(output_file and output_file.exists())
 
     # Subtitles (optional; separate N_m3u8DL-RE pass; --ongoing-live-subs none skips)
     subs_lang = str(poll_conf.get("subtitle_langs") or "eng|kor").strip()
-    if subs_lang.lower() not in ("none", "no", "off", "-", ""):
-        download_ongoing_live_subtitles_nm3u8dlre(
+    subs_requested = wants_subs and subs_lang.lower() not in ("none", "no", "off", "-", "")
+
+    subtitle_entries: list[dict] = []
+    subs_ok = True
+    if subs_requested:
+        subs_ok = download_ongoing_live_subtitles_nm3u8dlre(
             hls_url=hls_url,
             output_dir=out_dir,
             save_name=stem,
@@ -210,23 +223,89 @@ def _record_one(file_info: dict, poll_conf: dict):
             live_wait_time=poll_conf["subs_live_wait_time"],
         )
 
-    # Set/overwrite created timestamp (belt-and-suspenders).
-    try:
-        if created_at:
-            edit_creation_date(str(output_file), created_at)
-    except Exception:
-        pass
+        # Discover downloaded subtitle files (for optional mux + timestamps).
+        if subs_ok:
+            allowed = [x.strip().lower() for x in subs_lang.replace(",", "|").split("|") if x.strip()]
+            allowed_set = set(allowed)
+            # Common ISO-ish aliases used by subtitle filenames.
+            alias_map = {
+                "eng": ["en"],
+                "kor": ["ko"],
+                "jpn": ["ja"],
+            }
 
-    # Embed URL metadata if we have it.
-    try:
-        weverse_url = file_info.get("share_url") or live_url(state.COMMUNITY_NAME, post_id)
-        if weverse_url:
-            embed_url_metadata(str(output_file), weverse_url, title=file_info.get("title", ""))
-    except Exception:
-        pass
+            subtitle_entries = []
+            for f in out_dir.iterdir():
+                if not f.is_file():
+                    continue
+                if not f.name.startswith(stem):
+                    continue
+                if f.suffix.lower() not in (".vtt", ".srt"):
+                    continue
 
-    # Mark recorded so we don't start again on next poll.
-    mark_downloaded(post_id)
+                tail = f.stem[len(stem):].lstrip("._- ").lower()
+                guessed = None
+                for code in allowed:
+                    if code in tail:
+                        guessed = code
+                        break
+                    for a in alias_map.get(code, []):
+                        if a in tail:
+                            guessed = code
+                            break
+                    if guessed:
+                        break
+                if not guessed:
+                    guessed = "und"
+
+                subtitle_entries.append({"path": str(f), "lang": guessed})
+
+            # Set/overwrite created timestamp (belt-and-suspenders) on subtitle files too.
+            try:
+                if created_at:
+                    for entry in subtitle_entries:
+                        edit_creation_date(entry["path"], created_at)
+            except Exception:
+                pass
+
+    # Optional muxing of subtitles into the video container.
+    mux_ok = True
+    mux_effective = bool(mux_subs and wants_video and wants_subs and subs_requested)
+    if mux_effective:
+        mux_ok = bool(
+            output_file
+            and output_file.exists()
+            and subtitle_entries
+            and mux_subtitles_into_video(output_file, subtitle_entries) is not None
+        )
+
+    # Embed URL metadata if we have it (video only).
+    if output_file and output_file.exists() and video_ok:
+        try:
+            if created_at:
+                edit_creation_date(str(output_file), created_at)
+        except Exception:
+            pass
+        try:
+            weverse_url = file_info.get("share_url") or live_url(state.COMMUNITY_NAME, post_id)
+            if weverse_url:
+                embed_url_metadata(
+                    str(output_file),
+                    weverse_url,
+                    title=file_info.get("title", ""),
+                )
+        except Exception:
+            pass
+
+    # Mark recorded so we don't start again on next poll:
+    # - mark only when requested parts succeeded
+    mark_ok = (
+        (not wants_video or video_ok)
+        and (not wants_subs or subs_ok)
+        and (not mux_effective or mux_ok)
+    )
+    if mark_ok:
+        mark_downloaded(post_id)
 
 
 def process_ongoing_lives(
@@ -236,6 +315,8 @@ def process_ongoing_lives(
     live_wait_time: int = 5,
     subtitle_langs: str = "eng|kor",
     output_format: str = "mp4",
+    download_only: str = "both",
+    mux_subs: bool = False,
     *,
     skip_monitor_prompt: bool = False,
 ):
@@ -250,6 +331,8 @@ def process_ongoing_lives(
         "live_wait_time": live_wait_time,
         "subtitle_langs": subtitle_langs,
         "output_format": output_format,
+        "download_only": download_only,
+        "mux_subs": mux_subs,
         "subs_live_take_count": 500,
         "subs_live_wait_time": 4,
     }

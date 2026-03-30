@@ -23,7 +23,6 @@ from config import CFG, COMMON_HEADERS
 
 _REFRESH_ENDPOINT = "https://accountapi.weverse.io/api/v1/token/refresh"
 
-# Values taken from the standalone recorder script (weverseRecorder.py).
 _X_ACC_APP_SECRET = "5419526f1c624b38b10787e5c10b2a7a"
 _X_ACC_APP_VERSION = "3.3.6"
 

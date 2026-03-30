@@ -395,9 +395,20 @@ def process_official_media_menu():
                             download_cvideo(vid, path, date)
                             _embed_thumbnail(path, thumb_url, url_meta=_media_url, title=raw_t)
                             _vf2 = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
-                            if _vf2: utils.edit_creation_date(str(_vf2), date)
+                            if _vf2:
+                                utils.edit_creation_date(str(_vf2), date)
+                                found_any = True
+
+                        if is_mem or v.get("membershipOnly"):
+                            _matches = [
+                                f
+                                for f in Path(path).parent.iterdir()
+                                if f.name.startswith(Path(path).name + ".")
+                                and f.suffix.lower() in (".mkv", ".mp4")
+                            ]
+                            if _matches:
+                                found_any = True
                         _time.sleep(DOWNLOAD_SLEEP)
-                        found_any = True
 
         if state.DOWNLOAD_TYPE != "video":
             if phs := ext_b.get("image", {}).get("photos"):
@@ -406,9 +417,10 @@ def process_official_media_menu():
                     path = f"{m_dir}/{make_filename(author_name, date, f'{pid}_{photo_id}_{idx+1}', title=clean_t, template_key='official_media', tier=tier)}"
                     if not is_already_downloaded(path, post_id=pid):
                         console.print(f"  [Photo] {title} ({idx+1}/{len(phs)})")
-                        utils.download_file(ph["url"], path, date)
-                        embed_url_metadata(path, _media_url)
-                        found_any = True
+                        ok = utils.download_file(ph["url"], path, date)
+                        if ok:
+                            embed_url_metadata(path, _media_url)
+                            found_any = True
 
         if not found_any:
             console.print(f"  [Skip] {pid} contained no downloadable video or photos.")
