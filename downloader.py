@@ -962,7 +962,13 @@ def download_ongoing_live_subtitles_nm3u8dlre(
         return False
 
 
-def download_cvideo(video_id, path: str, date=None, naver_video_id: str | None = None):
+def download_cvideo(
+    video_id,
+    path: str,
+    date=None,
+    naver_video_id: str | None = None,
+    prefer_high_profile: bool = False,
+):
     vid_str = str(video_id)
     video_path = Path(path)
     ffmpeg_exe = BINARIES.get("ffmpeg", "ffmpeg")
@@ -1040,15 +1046,33 @@ def download_cvideo(video_id, path: str, date=None, naver_video_id: str | None =
                 utils.download_file(best_url, path, date)
                 return
 
-        # Fallback path: use adaptiveVideoUrl first, then best bitrate in videos.list.
+        # Fallback path: use adaptiveVideoUrl first, then best item in videos.list.
+        # For Moments, prefer encodingOption.profile == HIGH when present.
         video_url = play_info.get("adaptiveVideoUrl")
         if not video_url:
             video_list = play_info.get("videos", {}).get("list", [])
             if isinstance(video_list, dict):
                 video_list = [video_list]
             if video_list:
-                video_list.sort(key=lambda x: get_safe_int(x, "bitrate"), reverse=True)
-                video_url = video_list[0].get("source")
+                def _score(item: dict):
+                    enc = item.get("encodingOption") or {}
+                    prof = str(enc.get("profile") or "").upper()
+                    is_high = 1 if prof == "HIGH" else 0
+                    h = get_safe_int(enc, "height")
+                    try:
+                        vbit = float((item.get("bitrate") or {}).get("video", 0) or 0)
+                    except Exception:
+                        vbit = 0.0
+                    # If prefer_high_profile=True (Moments), HIGH wins first.
+                    # Otherwise, keep quality-first behavior by resolution/bitrate.
+                    return (
+                        is_high if prefer_high_profile else 0,
+                        h,
+                        vbit,
+                    )
+
+                best_item = max(video_list, key=_score)
+                video_url = best_item.get("source")
 
         if video_url:
             _save_video_url(vid_str, video_url)
@@ -1088,7 +1112,8 @@ def get_official_video_url(wv_video_id: str, naver_video_id: str):
             f"?key={in_key}&sid={sid}&devt=html5_pc&prv=N&lc=en&cpl=en"
             f"&adi={adi_encoded}&adu=%2F"
         )
-        console.print(f"  [Neonplayer] -> {playback_url[:80]}...")
+        if state.DEBUG_MODE:
+            console.print(f"  [Neonplayer] -> {playback_url[:80]}...")
 
         req = urllib.request.Request(
             playback_url,
@@ -1197,11 +1222,8 @@ def get_official_video_url(wv_video_id: str, naver_video_id: str):
 
         url = best.get("BaseURL")
         url = _unwrap_text(url)
-        console.print(
-            f"  [Video URL] rep={rep_id or '(unknown)'} "
-            f"height={best_h} bandwidth={best_bw} quality={quality_id or '(n/a)'}"
-        )
-        console.print(f"  [Video URL] -> {str(url)[:80]}...")
+        if state.DEBUG_MODE:
+            console.print(f"  [Video URL] -> {str(url)[:80]}...")
         return url
 
     except Exception as e:

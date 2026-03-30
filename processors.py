@@ -250,7 +250,7 @@ def process_moments(direct_id=None):
                     found_any = True
                 embed_url_metadata(path, _moment_url)
             elif state.DOWNLOAD_TYPE != "photo" and video_id:
-                download_cvideo(video_id, path, date)
+                download_cvideo(video_id, path, date, prefer_high_profile=True)
                 embed_url_metadata(path, _moment_url)
                 _mv = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
                 if _mv:
@@ -356,7 +356,7 @@ def process_moments(direct_id=None):
                             embed_url_metadata(path, _moment_url)
                             found_content = True
                     elif state.DOWNLOAD_TYPE != "photo" and video_id:
-                        download_cvideo(video_id, path, date)
+                        download_cvideo(video_id, path, date, prefer_high_profile=True)
                         embed_url_metadata(path, _moment_url)
                         _mv2 = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
                         if _mv2:
