@@ -38,10 +38,6 @@ binaries:
   mkvpropedit: "mkvpropedit"
   streamlink: "streamlink"
 
-# Browser for yt-dlp cookie extraction (must be logged into weverse.io).
-# Examples: firefox, chrome, chromium, edge, safari (platform-dependent).
-cookies_from_browser: "firefox"
-
 timezone: "Asia/Seoul"
 
 stop_threshold: 200

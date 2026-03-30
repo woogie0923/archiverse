@@ -22,7 +22,6 @@ You also need:
 
 - A Weverse **bearer token** (`auth_token` in config) for API access
 - A **Widevine device file** (`.wvd`) at `wvd_device_path` for membership / DRM-protected content
-- A desktop browser **logged into Weverse** — `cookies_from_browser` tells yt-dlp which browser profile to read cookies from
 
 Use this software only in line with Weverse’s terms of service and applicable law. You are responsible for your account and for content you download.
 
@@ -129,7 +128,6 @@ For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so 
 | `auth_token` | Weverse API bearer token |
 | `weverse_refresh_token` | Optional refresh token for long sessions |
 | `wvd_device_path` | Path to `.wvd` for Widevine |
-| `cookies_from_browser` | Browser name for yt-dlp cookie extraction (`firefox`, `chrome`, …) |
 | `base_dir` / `media_folder` / `folders` | Output layout |
 | `filename_templates` / `date_format` | How files are named |
 | `menu_communities` / `menu_community_ids` | Interactive picker and ID overrides |
@@ -143,7 +141,7 @@ Timezone for filenames and text headers is controlled by **`timezone`** (IANA na
 ## Troubleshooting
 
 - **Menus do not respond to keys** — use a normal terminal with a TTY, not a minimal IDE run console.
-- **403 / auth errors** — refresh `auth_token`; ensure the browser in `cookies_from_browser` is logged into Weverse.
+- **403 / auth errors** — refresh `auth_token` and verify it has access to the community/content.
 - **DRM or live failures after hours** — set `weverse_refresh_token` if supported by your setup.
 - **Binary not found** — set explicit paths under `binaries` in `config.yaml`.
 

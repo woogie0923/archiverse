@@ -26,7 +26,6 @@ CFG: dict = _load()
 
 AUTH_TOKEN      : str   = CFG.get("auth_token", "")
 WVD_DEVICE_PATH : str   = CFG.get("wvd_device_path", "")
-COOKIES_BROWSER : str   = CFG.get("cookies_from_browser", "firefox")
 MEDIA_FOLDER    : str   = CFG.get("media_folder", "Media")
 STOP_THRESHOLD  : int   = int(CFG.get("stop_threshold", 200))
 PAGED_SLEEP     : float = float(CFG.get("paged_sleep", 2))

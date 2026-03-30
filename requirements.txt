@@ -5,7 +5,6 @@
 PyYAML>=6.0
 requests>=2.28.0
 rich>=13.0
-yt-dlp>=2026.3.17
 xmltodict>=0.13.0
 pywidevine>=1.0.0
 filedate>=2.0.0

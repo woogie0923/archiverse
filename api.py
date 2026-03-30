@@ -4,22 +4,24 @@ Weverse API helpers: extractor setup, request runner, post fetcher,
 and the community-scoped password cache.
 """
 import hashlib
+import hmac
+import base64
 import re
 import json
 import os
 import time
 import urllib.parse
+import uuid
 from pathlib import Path
 
-import yt_dlp
-from yt_dlp.extractor.weverse import WeverseIE
+import requests
 
 import state
 from utils import console
 from rich.text import Text
 from config import (
-    AUTH_TOKEN, COOKIES_BROWSER, COMMON_HEADERS,
-    CFG, get_folder, CACHE_ENABLED,
+    COMMON_HEADERS, WEVERSE_API_BASE, WEVERSE_HMAC_KEY,
+    get_folder, CACHE_ENABLED,
 )
 
 # ---------------------------------------------------------------------------
@@ -282,22 +284,66 @@ def _cache_set(req: str, data: dict):
 _ext = None
 
 
+class _DirectWeverseExtractor:
+
+
+    def __init__(self):
+        self._session = requests.Session()
+        self._session.headers.update(COMMON_HEADERS)
+        self._device_id = uuid.uuid4().hex
+
+    @staticmethod
+    def _append_query(path: str, extra: dict[str, str]) -> str:
+        parsed = urllib.parse.urlsplit(path)
+        pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        seen = {k for k, _ in pairs}
+        for k, v in extra.items():
+            if k not in seen:
+                pairs.append((k, v))
+        query = urllib.parse.urlencode(pairs)
+        return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
+
+    def _call_api(self, req: str, _unused: str = "", data: bytes | None = None):
+        api_path = req if req.startswith("/") else f"/{req}"
+        api_path = self._append_query(api_path, {
+            "appId": "be4d79eb8fc7bd008ee82c8ec4ff6fd4",
+            "language": "en",
+            "os": "WEB",
+            "platform": "WEB",
+            "wpf": "pc",
+        })
+        wmsgpad = str(int(time.time() * 1000))
+        sign_input = f"{api_path[:255]}{wmsgpad}".encode("utf-8")
+        wmd = base64.b64encode(hmac.new(WEVERSE_HMAC_KEY, sign_input, hashlib.sha1).digest()).decode("utf-8")
+        url = f"{WEVERSE_API_BASE}{api_path}"
+        signed_query = {"wmsgpad": wmsgpad, "wmd": wmd}
+        method = "POST" if data is not None else "GET"
+        payload = data if data is not None else None
+        headers = {"WEV-device-Id": self._device_id}
+        if data is not None:
+            headers["Content-Type"] = "application/json"
+        try:
+            resp = self._session.request(
+                method, url, params=signed_query, data=payload, headers=headers, timeout=30
+            )
+        except Exception as e:
+            raise Exception(f"HTTP request failed: {e}")
+
+        if resp.status_code < 200 or resp.status_code >= 300:
+            body = (resp.text or "")[:300]
+            raise Exception(f"HTTP {resp.status_code}: {body}")
+
+        try:
+            return resp.json()
+        except Exception:
+            body = (resp.text or "")[:300]
+            raise Exception(f"Invalid JSON response: {body}")
+
+
 def make_extractor():
     global _ext
     if _ext is None:
-        ydl_params = {
-            "quiet": True,
-            "http_headers": COMMON_HEADERS,
-            "nocheckcertificate": True,
-        }
-        
-        if COOKIES_BROWSER and COOKIES_BROWSER.lower() != "none":
-            ydl_params["cookiesfrombrowser"] = (COOKIES_BROWSER,)
-
-        ydl  = yt_dlp.YoutubeDL(ydl_params)
-        _ext = WeverseIE()
-        _ext.set_downloader(ydl)
-        _ext.initialize()
+        _ext = _DirectWeverseExtractor()
     return _ext
 
 
