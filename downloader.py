@@ -962,7 +962,7 @@ def download_ongoing_live_subtitles_nm3u8dlre(
         return False
 
 
-def download_cvideo(video_id, path: str, date=None):
+def download_cvideo(video_id, path: str, date=None, naver_video_id: str | None = None):
     vid_str = str(video_id)
     video_path = Path(path)
     ffmpeg_exe = BINARIES.get("ffmpeg", "ffmpeg")
@@ -1027,15 +1027,25 @@ def download_cvideo(video_id, path: str, date=None):
     # PATH B: Standard Weverse VODs (UUID-style IDs like 4-2640187)
     req = f"/cvideo/v1.0/cvideo-{vid_str}/playInfo?videoId={vid_str}"
     try:
-        data      = run_extr(make_extractor(), req)
+        data = run_extr(make_extractor(), req)
         play_info = data.get("playInfo", {})
 
-        # Method 1 — adaptiveVideoUrl (primary)
-        video_url = play_info.get("adaptiveVideoUrl")
+        # Best path (when we have the Naver video id): fetch inKey and use neonplayer playback MPD,
+        # then pick the highest-resolution MP4 representation (same as official-channel flow).
+        nav_id = (str(naver_video_id).strip() if naver_video_id else "")
+        if nav_id:
+            best_url = get_official_video_url(str(vid_str), nav_id)
+            if best_url:
+                _save_video_url(vid_str, best_url)
+                utils.download_file(best_url, path, date)
+                return
 
-        # Method 2 — video list (fallback)
+        # Fallback path: use adaptiveVideoUrl first, then best bitrate in videos.list.
+        video_url = play_info.get("adaptiveVideoUrl")
         if not video_url:
             video_list = play_info.get("videos", {}).get("list", [])
+            if isinstance(video_list, dict):
+                video_list = [video_list]
             if video_list:
                 video_list.sort(key=lambda x: get_safe_int(x, "bitrate"), reverse=True)
                 video_url = video_list[0].get("source")
@@ -1092,27 +1102,105 @@ def get_official_video_url(wv_video_id: str, naver_video_id: str):
             raw = raw[3:]
         text = raw.decode("utf-8", errors="replace")
 
-        # The neonplayer v3 API returns JSON, not XML.
-        # Structure: { "MPD": [{ "Period": [{ "AdaptationSet": [...] }] }] }
-        data      = json.loads(text)
-        period    = data["MPD"][0]["Period"][0]
-        adapt     = period.get("AdaptationSet", [])
+        def _to_int(v) -> int:
+            try:
+                return int(v)
+            except Exception:
+                return 0
 
-        video_set = next(
-            (s for s in adapt if s.get("@mimeType") == "video/mp4"), None
-        )
-        if not video_set:
-            console.print("  [Error] No video/mp4 AdaptationSet found")
+        def _unwrap_text(v):
+            # xmltodict sometimes produces {'#text': '...'} or lists.
+            if isinstance(v, list):
+                return v[0] if v else ""
+            if isinstance(v, dict):
+                return v.get("#text") or v.get("value") or ""
+            return v or ""
+
+        def _pick_best_rep(reps: list) -> tuple[dict | None, int, int]:
+            best_rep = None
+            best_h = -1
+            best_bw = -1
+            for rep in reps:
+                h = _to_int(rep.get("@height") or rep.get("height") or 0)
+                bw = _to_int(rep.get("@bandwidth") or rep.get("bandwidth") or 0)
+                if (h, bw) > (best_h, best_bw):
+                    best_h, best_bw = h, bw
+                    best_rep = rep
+            return best_rep, best_h, best_bw
+
+        def _extract_quality(label_list) -> str:
+            if not label_list:
+                return ""
+            if isinstance(label_list, dict):
+                label_list = [label_list]
+            for lab in label_list:
+                kind = lab.get("@kind") if isinstance(lab, dict) else None
+                if kind == "qualityId":
+                    return _unwrap_text(lab)
+            return ""
+
+        trimmed = text.lstrip()
+        if trimmed.startswith("<"):
+            # Neonplayer response is MPD XML in some cases.
+            xml_data = xmltodict.parse(text)
+            mpd = xml_data.get("MPD", {}) if isinstance(xml_data, dict) else {}
+            period = mpd.get("Period", {})
+            if isinstance(period, list):
+                period = period[0] if period else {}
+
+            adapt = period.get("AdaptationSet", [])
+            if isinstance(adapt, dict):
+                adapt = [adapt]
+
+            video_set = next(
+                (s for s in adapt if s.get("@mimeType") == "video/mp4"), None
+            )
+            if not video_set:
+                console.print("  [Error] No video/mp4 AdaptationSet found (XML)")
+                return None
+
+            reps = video_set.get("Representation", [])
+            if isinstance(reps, dict):
+                reps = [reps]
+            best, best_h, best_bw = _pick_best_rep(reps)
+        else:
+            # Neonplayer response is JSON in most cases.
+            # Structure: { "MPD": [{ "Period": [{ "AdaptationSet": [...] }] }] }
+            data = json.loads(text)
+            period = data["MPD"][0]["Period"][0]
+            adapt = period.get("AdaptationSet", [])
+            if isinstance(adapt, dict):
+                adapt = [adapt]
+
+            video_set = next(
+                (s for s in adapt if s.get("@mimeType") == "video/mp4"), None
+            )
+            if not video_set:
+                console.print("  [Error] No video/mp4 AdaptationSet found (JSON)")
+                return None
+
+            reps = video_set.get("Representation", [])
+            if isinstance(reps, dict):
+                reps = [reps]
+            best, best_h, best_bw = _pick_best_rep(reps)
+
+        if not best:
+            console.print("  [Error] Could not find best video Representation")
             return None
 
-        reps = video_set.get("Representation", [])
-        if isinstance(reps, dict): reps = [reps]
-        best = sorted(reps, key=lambda r: int(r.get("@bandwidth", 0)), reverse=True)[0]
-        url  = best.get("BaseURL")
+        rep_id = _unwrap_text(best.get("@id") or best.get("id"))
+        quality_id = ""
+        # Some MPD structures use nvod:Label; others use Label.
+        labels = best.get("nvod:Label") or best.get("Label")
+        if labels:
+            quality_id = _extract_quality(labels)
 
-        # BaseURL may be a JSON array or a plain string — unwrap if needed
-        if isinstance(url, list): url = url[0]
-
+        url = best.get("BaseURL")
+        url = _unwrap_text(url)
+        console.print(
+            f"  [Video URL] rep={rep_id or '(unknown)'} "
+            f"height={best_h} bandwidth={best_bw} quality={quality_id or '(n/a)'}"
+        )
         console.print(f"  [Video URL] -> {str(url)[:80]}...")
         return url
 

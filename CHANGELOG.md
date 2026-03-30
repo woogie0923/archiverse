@@ -15,6 +15,7 @@ All notable changes to this project are recorded here. The history below follows
 - **Remove ongoing-live option rows from the main Actions list**
 - **Ongoing lives MKV remux** — map only v/a/sub streams when remuxing TS recordings into Matroska to avoid Matroska header/codec-parameter failures.
 - **`downloaded.json` correctness across downloads** — only record a post as downloaded after the requested downloads/muxing succeed (covers ongoing lives, feed archivers in `processors.py`, and official media in `official_media.py` / `official_media_menu.py`).
+- **Official-channel VOD quality selection** — `get_official_video_url()` now robustly selects the best MP4 representation (highest height, then bandwidth) and supports MPD XML as well as JSON responses.
 - **Saved post text (`.txt`)** — decode HTML/XML character references (`&gt;`, `&lt;`, `&amp;`, etc.) and strip WordprocessingML fragments (`<w:…>`, `</w:…>`) from post and comment bodies in `text_writer.py`.
 
 ---

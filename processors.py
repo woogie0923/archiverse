@@ -121,7 +121,12 @@ def process_single_post(post_id: str):
                     filename = make_filename(clean_name, date, f"{post_id}_{vid}", title="", template_key="artist_posts", tier=tier)
                     path = f"{artist_dir}/{filename}"
                     if not is_already_downloaded(path, post_id=post_id):
-                        download_cvideo(vid, path, date)
+                        naver_id = (
+                            (video_data.get("uploadInfo") or {}).get("videoId")
+                            or video_data.get("videoId")
+                            or ""
+                        )
+                        download_cvideo(vid, path, date, naver_video_id=str(naver_id) if naver_id else None)
                         embed_url_metadata(path, _post_url)
                         _av = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
                         if _av:
@@ -478,7 +483,13 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
                         filename = make_filename(clean_member_name, date, f"{post_id}_{vid}", title="", template_key="artist_posts", tier=tier)
                         path     = f"{artist_dir}/{filename}"
                         if not is_already_downloaded(path, post_id=post_id):
-                            download_cvideo(vid, path, date)
+                            # Prefer Naver/neonplayer video id when available (enables highest-quality MPD selection).
+                            naver_id = (
+                                (video_data.get("uploadInfo") or {}).get("videoId")
+                                or video_data.get("videoId")
+                                or ""
+                            )
+                            download_cvideo(vid, path, date, naver_video_id=str(naver_id) if naver_id else None)
                             embed_url_metadata(path, _post_url)
                             _av = next((f for f in Path(path).parent.iterdir() if f.name.startswith(Path(path).name + ".") and f.suffix.lower() in (".mkv", ".mp4")), None)
                             if _av:

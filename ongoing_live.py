@@ -49,7 +49,7 @@ def select_ongoing_live_options() -> dict | str | None:
 
     download_opts = ["both", "video", "subs"]
     poll_opts = [10, 30, 60]
-    subs_opts = ["eng|kor", "eng", "kor", "none"]
+    subs_opts = ["eng|kor", "eng", "kor", "none", "all"]
     fmt_opts = ["mp4", "mkv"]
 
     options: list[tuple[str, str]] = [
