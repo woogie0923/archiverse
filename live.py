@@ -14,6 +14,7 @@ from helpers import (
     fix_metadata, get_author_name, get_filtered_items, 
     make_filename, sanitise
 )
+from download_cache import invalidate_video_url_cache_entry
 from downloader import (
     get_vod_url,
     download_drm_video,
@@ -369,8 +370,22 @@ def download_single_live(item_data: dict, post_id: str | None = None):
         temp_video_base   = lives_dir / f"{temp_id}_temp"
         expected_video    = lives_dir / f"{temp_id}_temp.mp4"
 
-        utils.download_file(video_url, str(temp_video_base), meta["date"])
-        
+        ok_video = utils.download_file(video_url, str(temp_video_base), meta["date"])
+        if not ok_video:
+            # Cached MP4 URLs use time-limited Akamai signatures; refetch playInfo once.
+            invalidate_video_url_cache_entry(str(video_id))
+            console.print(
+                "  [VOD URL] Stream URL likely expired; refreshing playInfo and retrying video download…"
+            )
+            video_url, subs, vod_thumb_url = get_vod_url(video_id, force_refresh=True)
+            if not video_url:
+                console.print("  [Error] Could not resolve VOD URL after refresh.")
+                return
+            ok_video = utils.download_file(video_url, str(temp_video_base), meta["date"])
+            if not ok_video:
+                console.print("  [Error] VOD video download failed after refreshing playInfo.")
+                return
+
         actual_video = expected_video
         try:
             # Iterate directory to find the file literally (avoids glob bracket bugs)
@@ -380,6 +395,10 @@ def download_single_live(item_data: dict, post_id: str | None = None):
                     break
         except Exception as e:
             console.print(f"  [Discovery Error] {e}")
+
+        if not actual_video.exists():
+            console.print("  [Error] VOD MP4 missing after download; aborting.")
+            return
 
         sub_files: list[tuple[str, str]] = []
         for s in subs:
@@ -408,9 +427,6 @@ def download_single_live(item_data: dict, post_id: str | None = None):
                     pass
 
             sub_files.append((str(actual_sub), lang))
-
-        if not actual_video.exists():
-            return
 
         thumb_url = live_vod_thumbnail_url(item_data, vod_playinfo_thumb=vod_thumb_url)
         thumb_path = None

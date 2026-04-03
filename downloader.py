@@ -366,13 +366,16 @@ def download_drm_video(
         console.print(f"  [DRM Error] {post_id}: {e}")
 
 
-def get_vod_url(video_id: str):
+def get_vod_url(video_id: str, force_refresh: bool = False):
     """
     Fetch the highest-quality MP4 URL and subtitle list for a live VOD.
     Returns (video_url, subtitles, thumb_url) where subtitles is a list of
     {'url': ..., 'lang': ...} dicts.
+
+    force_refresh: skip video_urls.json and refetch playInfo (e.g. after a 403
+    on a cached Akamai URL with expired __gda__ tokens).
     """
-    _cached = _load_video_url_cache().get(str(video_id))
+    _cached = None if force_refresh else _load_video_url_cache().get(str(video_id))
     if _cached:
         if isinstance(_cached, dict) and _cached.get("url"):
             console.print(f"  [VOD URL] Using cached URL+subs for {video_id}.")

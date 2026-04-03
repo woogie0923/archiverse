@@ -189,6 +189,26 @@ def _save_video_url(video_id: str, url: str) -> None:
         pass
 
 
+def invalidate_video_url_cache_entry(video_id: str) -> None:
+    """
+    Drop a cached VOD stream URL (e.g. after Akamai __gda__ expiry returns 403).
+
+    The next get_vod_url() call will refetch playInfo for a fresh signed URL.
+    """
+    p = _video_url_cache_path()
+    if p is None:
+        return
+    try:
+        store = _load_video_url_cache()
+        if str(video_id) not in store:
+            return
+        store.pop(str(video_id), None)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _log_n_m3u8dl_command(command: str, post_id: str) -> None:
     """Append an N_m3u8DL-RE command to the community log file."""
     try:
