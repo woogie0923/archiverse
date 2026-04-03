@@ -108,12 +108,16 @@ python archiverse.py -c fromis9 --ongoing-live-now
 python archiverse.py -c fromis9 --ongoing-live-now "4-1234567890"
 ```
 
-Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-download-only {both,video,subs}`, `--ongoing-live-mux-subs` (embed downloaded subtitles into the recorded video container), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking).
+Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-download-only {both,video,subs}`, `--ongoing-live-mux-subs` (embed downloaded subtitles into the recorded video container), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking). The `--ongoing-live-chat` flag is reserved for future use (ongoing chat is not archived yet).
 In interactive mode, these same ongoing-live options can be configured under the **Actions** block.
 
 For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so access tokens can be refreshed (see `weverse_auth.py`). The app shows refresh-token status at startup and in the interactive main menu.
 
 DRM still logs normal N_m3u8DL-RE progress/errors, but no longer prints the full raw command line in terminal output.
+
+### Past live VODs (standard MP4)
+
+For finished lives saved as plain MP4 (not Widevine), resolved stream URLs are **cached per community** in `video_urls.json` (default folder: `{base_dir}/{community}/Cache/` — see `folders.api_cache` in config). Those CDN URLs use **time-limited signatures**; if a download fails (for example HTTP **403**), the tool **drops that cache entry, refetches `playInfo`, and retries the video once**. You can also delete the JSON entry for a given `video_id` manually if you want to force a fresh URL without waiting for a failure.
 
 ### Other useful flags
 
@@ -134,6 +138,8 @@ DRM still logs normal N_m3u8DL-RE progress/errors, but no longer prints the full
 | `menu_communities` / `menu_community_ids` | Interactive picker and ID overrides |
 | `official_channels` / `former_members` | Extra menu entries per community slug |
 | `binaries` | Paths to `ffmpeg`, `ffprobe`, `streamlink`, `N_m3u8DL-RE`, etc. |
+| `cache_enabled` | API response cache under each community’s `cache/` folder |
+| `download_history_enabled` | `downloaded.json` skip tracking (see template comments) |
 
 Timezone for filenames and text headers is controlled by **`timezone`** (IANA name, e.g. `Asia/Seoul`). A reference list: [tz database time zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 
@@ -142,7 +148,8 @@ Timezone for filenames and text headers is controlled by **`timezone`** (IANA na
 ## Troubleshooting
 
 - **Menus do not respond to keys** — use a normal terminal with a TTY, not a minimal IDE run console.
-- **403 / auth errors** — refresh `auth_token` and verify it has access to the community/content.
+- **403 on Weverse API calls** — refresh `auth_token` and verify it has access to the community/content.
+- **403 on a past live VOD MP4 URL** — usually an **expired cached CDN URL**, not account access. The archiver refetches `playInfo` automatically; if it still fails, remove that `video_id` from `video_urls.json` (see [Past live VODs](#past-live-vods-standard-mp4)) or delete the file to clear all cached stream URLs for that community.
 - **DRM or live failures after hours** — set `weverse_refresh_token` if supported by your setup.
 - **Binary not found** — set explicit paths under `binaries` in `config.yaml`.
 
@@ -153,11 +160,15 @@ Timezone for filenames and text headers is controlled by **`timezone`** (IANA na
 | Path | Role |
 |------|------|
 | `archiverse.py` | CLI entry point |
+| `app_runtime.py` | Wires CLI flags to menus and actions |
 | `config.yaml` | Your local configuration (not in template) |
 | `config.yaml.template` | Safe template for new setups |
 | `interactive_menu.py` / `live.py` | TUI menus and live flows |
+| `ongoing_live.py` | On-air live monitoring and recording |
 | `processors.py` / `official_media.py` | Feed and media archiving |
 | `downloader.py` / `api.py` | Downloads and Weverse API helpers |
+| `download_cache.py` | Per-community caches (`downloaded.json`, DRM keys, VOD URL cache, etc.) |
+| `weverse_auth.py` | Optional access-token refresh using `weverse_refresh_token` |
 
 ## TO-DO
 - Support for on-air membership livestreams
