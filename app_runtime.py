@@ -111,6 +111,14 @@ class AppRuntime:
             state.DOWNLOAD_HISTORY_ENABLED = False
         state.TARGET_ARTISTS = parse_target_artists(self.args.artists)
         console.print(f"  [Config] Download Mode: {state.DOWNLOAD_TYPE.upper()}")
+        try:
+            from weverse_auth import get_refresh_token
+            if get_refresh_token():
+                console.print("  [Auth] Refresh token configured (auto-refresh enabled).")
+            else:
+                console.print("  [Auth] Refresh token not set (using static auth_token only).")
+        except Exception:
+            console.print("  [Auth] Refresh-token status unavailable.")
 
     def init_community(self, name: str, idx: int) -> bool:
         state.COMMUNITY_NAME = name
@@ -139,17 +147,15 @@ class AppRuntime:
             process_lives(direct_id=direct_id, debug=self.args.debug)
 
         if self.args.ongoing_live_monitor:
-            process_ongoing_lives(**ongoing_live_kwargs_from_args(
-                self.args,
+            self._run_ongoing_live_from_args(
                 direct_match=self.args.ongoing_live_now if isinstance(self.args.ongoing_live_now, str) else None,
                 skip_prompt=self.args.ongoing_live_monitor_no_prompt,
-            ))
+            )
         elif self.args.ongoing_live_now:
-            process_ongoing_lives(**ongoing_live_kwargs_from_args(
-                self.args,
+            self._run_ongoing_live_from_args(
                 direct_match=self.args.ongoing_live_now if isinstance(self.args.ongoing_live_now, str) else None,
                 skip_prompt=False,
-            ))
+            )
 
         if self.args.moments:
             moment_id = self.args.moments if isinstance(self.args.moments, str) else None
@@ -180,16 +186,7 @@ class AppRuntime:
             if sel in ("back", "quit"):
                 return sel
             if isinstance(sel, dict):
-                process_ongoing_lives(
-                    direct_match=None,
-                    poll_seconds=sel.get("poll_seconds", self.args.ongoing_live_poll),
-                    record_all=sel.get("record_all", self.args.ongoing_live_record_all),
-                    subtitle_langs=sel.get("subtitle_langs", self.args.ongoing_live_subs),
-                    output_format=sel.get("output_format", self.args.ongoing_live_output_format),
-                    download_only=sel.get("download_only", "both"),
-                    mux_subs=sel.get("mux_subs", False),
-                    skip_monitor_prompt=self.args.ongoing_live_monitor_no_prompt,
-                )
+                self._run_ongoing_live_from_menu_selection(sel)
             return None
         if action_key == "media":
             return process_official_media()
@@ -203,6 +200,25 @@ class AppRuntime:
             console.print("  [Skip] No official channels selected.")
             return None
         return None
+
+    def _run_ongoing_live_from_args(self, *, direct_match=None, skip_prompt=False):
+        process_ongoing_lives(**ongoing_live_kwargs_from_args(
+            self.args,
+            direct_match=direct_match,
+            skip_prompt=skip_prompt,
+        ))
+
+    def _run_ongoing_live_from_menu_selection(self, sel: dict):
+        process_ongoing_lives(
+            direct_match=None,
+            poll_seconds=sel.get("poll_seconds", self.args.ongoing_live_poll),
+            record_all=sel.get("record_all", self.args.ongoing_live_record_all),
+            subtitle_langs=sel.get("subtitle_langs", self.args.ongoing_live_subs),
+            output_format=sel.get("output_format", self.args.ongoing_live_output_format),
+            download_only=sel.get("download_only", "both"),
+            mux_subs=sel.get("mux_subs", False),
+            skip_monitor_prompt=self.args.ongoing_live_monitor_no_prompt,
+        )
 
     def run_cli_mode(self):
         if not self.communities_cli:

@@ -18,6 +18,8 @@ from pathlib import Path
 
 import requests
 
+import state
+from utils import console
 from config import CFG, COMMON_HEADERS
 
 
@@ -74,6 +76,10 @@ def get_access_token(min_valid_seconds: int = 6 * 3600) -> str:
     # If cached access token is still sufficiently valid, reuse it.
     if access and expires and (expires - now) > min_valid_seconds:
         COMMON_HEADERS["Authorization"] = f"Bearer {access}"
+        if state.DEBUG_MODE:
+            remaining = expires - now
+            mins = max(0, remaining // 60)
+            console.print(f"  [Auth] Using cached Weverse access token (~{mins} min remaining).")
         return str(access)
 
     refresh_token = get_refresh_token()
@@ -115,4 +121,7 @@ def get_access_token(min_valid_seconds: int = 6 * 3600) -> str:
     _save_cached_token(data)
 
     COMMON_HEADERS["Authorization"] = f"Bearer {accessToken}"
+    # Always print a one-line notice when a refresh occurs so users can verify it.
+    mins = max(0, expiresIn // 60)
+    console.print(f"  [Auth] Refreshed Weverse access token via refresh token (valid for ~{mins} min).")
     return str(accessToken)

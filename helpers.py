@@ -9,7 +9,6 @@ import re
 import shutil
 
 import state
-import uuid
 from pathlib import Path
 
 from utils import console, run_ffmpeg_with_progress

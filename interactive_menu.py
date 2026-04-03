@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import state
+from rich.text import Text
 from utils import console
 from api import make_extractor, run_extr, menu_status_board_renderable
 from config import CFG, get_folder
@@ -19,7 +20,6 @@ def select_community_menu(communities: list[str]) -> str | None:
     """
     from live import get_key
     from rich.table import Table
-    from rich.text import Text
 
     from menu_rich import cell, clear_menu_screen
 
@@ -96,6 +96,15 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         name = entry.get("name", mid).strip()
         if mid:
             official_channels.append({"memberId": mid, "profileName": name})
+
+    try:
+        from weverse_auth import get_refresh_token
+        if get_refresh_token():
+            auth_status_text = Text("  [Auth] Refresh token configured (auto-refresh enabled).", style="dim")
+        else:
+            auth_status_text = Text("  [Auth] Refresh token not set (using static auth_token only).", style="dim")
+    except Exception:
+        auth_status_text = Text("  [Auth] Refresh-token status unavailable.", style="dim")
 
     # Each filter is a list of (display_label, state_values) tuples.
     # Space cycles forward through options; the active index is stored.
@@ -223,7 +232,6 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
 
     from rich.live import Live
     from rich.table import Table
-    from rich.text import Text
     from rich.padding import Padding
     from rich.console import Group
 
@@ -645,6 +653,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         sep = [Text("")] if sep_n > 0 else []
         parts = [
             menu_status_board_renderable(compact=compact_status),
+            auth_status_text,
             Text(menu_title, style="bold"),
         ]
         if title_gap:

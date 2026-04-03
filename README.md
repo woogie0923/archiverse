@@ -16,7 +16,6 @@ This project is based on [Weverse Archive](https://github.com/honeyedoasis/Wever
   - [FFmpeg](https://ffmpeg.org/) (and **ffprobe**, usually in the same install — used for mux/remux progress)
   - [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE) (DRM and HLS)
   - [mkvpropedit](https://mkvtoolnix.download/) (MKV metadata, when used)
-  - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — often installed via pip; can also be a standalone binary referenced in config
 
 You also need:
 
@@ -112,7 +111,9 @@ python archiverse.py -c fromis9 --ongoing-live-now "4-1234567890"
 Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-download-only {both,video,subs}`, `--ongoing-live-mux-subs` (embed downloaded subtitles into the recorded video container), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking).
 In interactive mode, these same ongoing-live options can be configured under the **Actions** block.
 
-For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so access tokens can be refreshed (see `weverse_auth.py`).
+For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so access tokens can be refreshed (see `weverse_auth.py`). The app shows refresh-token status at startup and in the interactive main menu.
+
+DRM still logs normal N_m3u8DL-RE progress/errors, but no longer prints the full raw command line in terminal output.
 
 ### Other useful flags
 

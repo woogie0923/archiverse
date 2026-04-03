@@ -9,6 +9,7 @@ All notable changes to this project are recorded here. The history below follows
 - **Add an “Ongoing Lives Settings” submenu** (download-only, poll, subs, output format, mux subs, record-all)
 - **Ongoing lives controls**: `--ongoing-live-download-only {both,video,subs}` and `--ongoing-live-mux-subs` (plus matching interactive menu toggles for poll interval, subtitles, output format, and record-all).
 - **Main menu history toggle** — filters can disable reading/updating `downloaded.json` for the run (via `--no-history` behavior).
+- **Token refresh visibility** — startup and interactive main menu now show refresh-token status, and successful token refreshes print an `[Auth]` confirmation line.
 
 ### Fixed
 
@@ -17,6 +18,13 @@ All notable changes to this project are recorded here. The history below follows
 - **`downloaded.json` correctness across downloads** — only record a post as downloaded after the requested downloads/muxing succeed (covers ongoing lives, feed archivers in `processors.py`, and official media in `official_media.py` / `official_media_menu.py`).
 - **Official-channel VOD quality selection** — `get_official_video_url()` now robustly selects the best MP4 representation (highest height, then bandwidth) and supports MPD XML as well as JSON responses.
 - **Saved post text (`.txt`)** — decode HTML/XML character references (`&gt;`, `&lt;`, `&amp;`, etc.) and strip WordprocessingML fragments (`<w:…>`, `</w:…>`) from post and comment bodies in `text_writer.py`.
+- **Moments video quality selection** — `cvideo` selection for moments now prefers `encodingOption.profile=HIGH` when available.
+- **Debug noise reduction** — `[Neonplayer]` and `[Video URL]` lines are only printed in `--debug` mode; raw N_m3u8DL-RE command lines are no longer printed in terminal output.
+
+### Changed
+
+- **API layer no longer depends on yt-dlp extractor** — requests now call Weverse endpoints directly with required signed parameters (`wmd`/`wmsgpad`) and shared headers.
+- **Runtime structure cleanup** — execution flow is centralized via `app_runtime.py` (`AppRuntime`) and entrypoint/menu orchestration was tidied without changing behavior.
 
 ---
 

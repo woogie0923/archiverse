@@ -5,7 +5,6 @@ processor functions. Interactive TUI menus live in interactive_menu.py.
 """
 import argparse
 
-from text_writer import save_post_text, embed_url_metadata  # noqa
 from app_runtime import AppRuntime
 
 CLI_EPILOG = """

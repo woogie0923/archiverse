@@ -13,8 +13,6 @@ import subprocess
 from datetime import datetime
 import urllib.parse
 import urllib.request 
-import shutil
-import uuid
 from pathlib import Path
 
 import requests
@@ -196,7 +194,6 @@ def download_drm_video(
                 full_command = " ".join(cmd_parts)
                 console.print(f"  [DRM] Destination: {base_dir}")
                 console.print(f"  [DRM] Output file: {display_name}")
-                console.print(f"  [DRM] Command (from log): {full_command}")
                 _log_n_m3u8dl_command(full_command, post_id)
                 subprocess.run(full_command, shell=True, check=True)
 
@@ -308,15 +305,11 @@ def download_drm_video(
         save_obj = Path(save_path)
         base_dir = save_obj.parent
         base_dir.mkdir(parents=True, exist_ok=True)
-
-        # Full display name — strip only Windows-illegal chars and lone surrogates,
-        # keeping emojis and all valid Unicode.
         display_name = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "", save_obj.name)
         display_name = "".join(ch for ch in display_name if not (0xD800 <= ord(ch) <= 0xDFFF))
         display_name = " ".join(display_name.split()).strip(".")
 
-        # N_m3u8DL-RE is passed an ASCII-safe temp name to avoid any shell/tool
-        # emoji handling issues.  We rename to display_name after download.
+
         import uuid as _uuid
         temp_dl_name = f"wv_drm_{_uuid.uuid4().hex[:12]}"
 
@@ -336,11 +329,9 @@ def download_drm_video(
         full_command = " ".join(cmd_parts)
         console.print(f"  [DRM] Destination: {base_dir}")
         console.print(f"  [DRM] Output file: {display_name}")
-        console.print(f"  [DRM] Command: {full_command}")
         _log_n_m3u8dl_command(full_command, post_id)
         subprocess.run(full_command, shell=True, check=True)
 
-        # Locate the temp output and rename to the display name
         temp_file = base_dir / f"{temp_dl_name}.mkv"
         if not temp_file.exists():
             temp_file = base_dir / f"{temp_dl_name}.mp4"
@@ -354,15 +345,11 @@ def download_drm_video(
         temp_file.rename(output_file)
 
         if output_file.exists():
-            # Embed thumbnail
             if thumb_url:
                 _embed_thumbnail_drm(output_file, thumb_url)
-            # Embed Weverse URL into MKV/MP4 comment metadata
             if weverse_url:
                 from text_writer import embed_url_metadata
                 embed_url_metadata(str(output_file), weverse_url, title=title)
-            # Set Windows "Created" timestamp. Prefer provided created_at,
-            # otherwise fall back to parsing YYYY-MM-DD from filename.
             try:
                 if created_at:
                     utils.edit_creation_date(str(output_file), created_at)
@@ -385,7 +372,6 @@ def get_vod_url(video_id: str):
     Returns (video_url, subtitles, thumb_url) where subtitles is a list of
     {'url': ..., 'lang': ...} dicts.
     """
-    # Check video URL cache first (supports both legacy str and new dict format)
     _cached = _load_video_url_cache().get(str(video_id))
     if _cached:
         if isinstance(_cached, dict) and _cached.get("url"):
@@ -453,7 +439,6 @@ def get_vod_url(video_id: str):
     if thumb_url:
         console.print(f"  [Thumbnail] -> {thumb_url[:80]}...")
 
-    # Cache full metadata so future runs still mux subtitles.
     try:
         p = _video_url_cache_path()
         if p is not None:
@@ -490,8 +475,6 @@ def get_live_hls_url(video_id: str) -> tuple[str | None, bool]:
     try:
         data = run_extr(make_extractor(), req, retries=3)
     except Exception as e:
-        # Optional: if access token expired and refresh token exists,
-        # refresh and retry once.
         try:
             from weverse_auth import get_refresh_token, get_access_token
             if get_refresh_token():
@@ -521,7 +504,6 @@ def get_live_hls_url(video_id: str) -> tuple[str | None, bool]:
     if not media_infos:
         return None, False
 
-    # Choose first HLS stream (mirrors recorder script).
     media_info = media_infos[0]
     is_drm_like = "aes" in media_info
     hls_url = media_info.get("path")
@@ -554,11 +536,9 @@ def record_ongoing_live_nm3u8dlre(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Capture a before snapshot to help us identify the new output file.
     before = {p for p in out_dir.iterdir() if p.is_file() and p.name.startswith(save_name)}
 
     if is_drm_like:
-        # Optional: refresh access token just before DRM/live capture.
         try:
             from weverse_auth import get_refresh_token, get_access_token
             if get_refresh_token():
@@ -610,7 +590,6 @@ def record_ongoing_live_nm3u8dlre(
     ]
 
     if is_drm_like:
-        # COMMON_HEADERS.Authorization already includes the "Bearer ..." prefix.
         auth_val = COMMON_HEADERS.get("Authorization", "")
         if auth_val:
             cmd.extend(["-H", f"Authorization: {auth_val}"])
@@ -619,8 +598,6 @@ def record_ongoing_live_nm3u8dlre(
 
     console.print(f"  [Live Record] Running N_m3u8DL-RE: {save_name}")
     try:
-        # Avoid capturing stdout/stderr for long-running recordings; it can
-        # grow very large and consume memory.
         result = subprocess.run(cmd)
     except Exception as e:
         console.print(f"  [Live Record Error] {e}")
@@ -630,7 +607,6 @@ def record_ongoing_live_nm3u8dlre(
         console.print(f"  [Live Record Error] N_m3u8DL-RE failed with code {result.returncode}")
         return None
 
-    # Identify the final output file created by this run.
     candidates = [
         p for p in out_dir.iterdir()
         if p.is_file()
@@ -640,8 +616,6 @@ def record_ongoing_live_nm3u8dlre(
     ]
 
     if not candidates:
-        # Fallback: sometimes the output file existed with the same name
-        # if previous runs partially succeeded.
         candidates = [
             p for p in out_dir.iterdir()
             if p.is_file()
@@ -652,7 +626,6 @@ def record_ongoing_live_nm3u8dlre(
     if not candidates:
         return None
 
-    # Choose newest by mtime.
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     output_file = candidates[0]
 
@@ -800,7 +773,6 @@ def record_ongoing_live_streamlink(
     out_fmt = suf if suf in ("mp4", "mkv") else "mp4"
     final_path = output_path.with_suffix(f".{out_fmt}")
 
-    # Streamlink writes raw stream bytes; remux to mp4 or mkv afterward.
     temp_path = final_path.with_suffix(".ts")
 
     streams = _streamlink_list_streams(hls_url)
@@ -827,9 +799,7 @@ def record_ongoing_live_streamlink(
         ]
     )
 
-    # Streamlink option compatibility:
-    # - Newer versions: --stream-segmented-queue-deadline
-    # - Older versions: --hls-segment-queue-threshold
+
     if _streamlink_supports("--stream-segmented-queue-deadline"):
         cmd[1:1] = ["--stream-segmented-queue-deadline", "15"]
     elif _streamlink_supports("--hls-segment-queue-threshold"):
@@ -853,8 +823,6 @@ def record_ongoing_live_streamlink(
             "-movflags", "+faststart", "-f", "mp4", str(remux_tmp),
         ]
     else:
-        # Matroska remux: TS recordings may contain "data" streams that Matroska
-        # rejects. Map only v/a/sub streams to keep remux robust.
         cmd_remux = [
             ffmpeg,
             "-y",

@@ -11,17 +11,17 @@ from pathlib import Path
 import utils
 from utils import console
 import state
-from config import DOWNLOAD_SLEEP, PAGED_SLEEP, STOP_THRESHOLD, get_folder
+from config import DOWNLOAD_SLEEP, STOP_THRESHOLD, get_folder
 from text_writer import (
-    save_post_text, embed_url_metadata, is_text_saved,
+    save_post_text, embed_url_metadata,
     artist_post_url, moment_url, official_post_url,
 )
 from api import make_extractor, run_extr, fetch_post_details, register_member_name
 from helpers import (
-    get_author_name, make_filename, matches_target, sanitise, sanitise_surrogates
+    get_author_name, make_filename, matches_target, sanitise
 )
 from downloader import (
-    is_already_downloaded, download_cvideo, download_drm_video,
+    is_already_downloaded, download_cvideo,
     get_official_video_url, mark_downloaded
 )
 from official_media import process_official_media

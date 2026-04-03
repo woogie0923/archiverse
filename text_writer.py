@@ -28,7 +28,6 @@ def _clean_post_body_text(raw: str) -> str:
     if not raw:
         return ""
     s = raw.strip()
-    # Opening, closing, and self-closing w:* tags (API sometimes leaves </w:b> behind)
     s = re.sub(r"</?w:[^>]+>", "", s)
     s = html.unescape(s)
     s = re.sub(r"\n{3,}", "\n\n", s).strip()
@@ -294,7 +293,6 @@ def fetch_comments(post_id: str) -> tuple[list, str]:
     def _collect(items):
         nonlocal post_body
         for c in items:
-            # Extract the real moment body from the first POST parent found
             if not post_body:
                 parent = c.get("parent", {})
                 if parent.get("type") == "POST":
@@ -309,7 +307,6 @@ def fetch_comments(post_id: str) -> tuple[list, str]:
             if not body:
                 continue
 
-            # Build "OFFICIAL NAME (profileName)" e.g. "LEE NA GYUNG (이나경)"
             official_name = author.get("artistOfficialProfile", {}).get("officialName", "")
             profile_name  = author.get("profileName", "")
             if official_name and profile_name and official_name != profile_name:
@@ -317,7 +314,6 @@ def fetch_comments(post_id: str) -> tuple[list, str]:
             else:
                 display_name = official_name or profile_name
 
-            # Capture the fan comment the artist replied to (parent.type == "COMMENT")
             parent_block = c.get("parent", {})
             parent_data  = None
             if parent_block.get("type") == "COMMENT":
@@ -383,7 +379,7 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
         if force_comments or state.SAVE_COMMENTS:
             comments, post_body_from_api = fetch_comments(_fetch_pid)
             if not force_comments and not state.SAVE_COMMENTS:
-                comments = []  # body-only fetch when not saving comments
+                comments = []
         else:
             _, post_body_from_api = fetch_comments(_fetch_pid)
 
@@ -403,7 +399,7 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
     if body: lines.append(body)
     if comments:
         lines.append("\n" + "\u2500\u2500 Artist Comments " + "\u2500" * 38)
-        # Build a set of comment IDs that belong to artist comments so we can
+        # Build a set of comment IDs that belong to artist comments to
         # detect when an artist replied to their own comment.
         artist_comment_ids = {c["commentId"] for c in comments if c.get("commentId")}
         seen_parent_ids: set = set()
@@ -447,9 +443,6 @@ def official_post_url(community: str, post_id: str) -> str:
 def live_url(community: str, post_id: str) -> str:
     return f"https://weverse.io/{community.lower()}/live/{post_id}"
 
-# ---------------------------------------------------------------------------
-# Live chat archiving
-# ---------------------------------------------------------------------------
 
 def _find_first_value_by_keys(obj, keys: set[str]):
     """Depth-first search for the first value whose key is in keys."""
@@ -487,7 +480,6 @@ def _get_chat_id(post_id: str) -> str | None:
     if not post:
         return None
 
-    # Common-ish key names seen across Weverse API variants.
     val = _find_first_value_by_keys(post, {"chatId", "chat_id", "chatRoomId", "chatRoomID"})
     if val is None:
         return None

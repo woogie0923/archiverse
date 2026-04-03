@@ -2,22 +2,17 @@
 live.py
 Interactive live stream menu, keyboard input handler, and live download logic.
 """
-import re
-import subprocess
-import sys
 import time
 from pathlib import Path
 
 import utils
 from utils import console
-import shutil
-import json
 import state
-from config import DOWNLOAD_SLEEP, BINARIES
-from api import make_extractor, run_extr, fetch_lives_page
+from config import BINARIES
+from api import fetch_lives_page
 from helpers import (
     fix_metadata, get_author_name, get_filtered_items, 
-    make_filename, sanitise, mux_media_with_subtitles
+    make_filename, sanitise
 )
 from downloader import (
     get_vod_url,
@@ -307,7 +302,7 @@ def download_single_live(item_data: dict, post_id: str | None = None):
     safe_filename = _safe_fs_stem(filename)
 
     tier      = "Membership" if is_mem else "Public"
-    from config import get_folder, MEDIA_FOLDER
+    from config import get_folder
     lives_dir = Path(
         get_folder(
             "lives",
@@ -429,7 +424,7 @@ def download_single_live(item_data: dict, post_id: str | None = None):
             if thumb_matches:
                 thumb_path = thumb_matches[0]
 
-        from text_writer import live_url, embed_url_metadata
+        from text_writer import live_url
         weverse_url = live_url(state.COMMUNITY_NAME, post_id)
         live_title  = meta.get("title", "")
 
@@ -487,7 +482,6 @@ def download_single_live(item_data: dict, post_id: str | None = None):
                 pass
             except Exception:
                 pass
-            import datetime as _dt
             try:
                 _live_date = meta["date"]
                 utils.edit_creation_date(str(final_path), _live_date)
