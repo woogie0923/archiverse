@@ -2,6 +2,7 @@
 config.py
 Loads config.yaml and exposes a single CFG dict used by all modules.
 """
+import re
 import sys
 from pathlib import Path
 
@@ -40,10 +41,7 @@ CACHE_ENABLED            : bool  = bool(CFG.get("cache_enabled", True))
 DOWNLOAD_HISTORY_ENABLED : bool  = bool(CFG.get("download_history_enabled", True))
 TIMEZONE                 : str   = CFG.get("timezone", "Asia/Seoul")
 
-# Bracket style for {tier} and {post_id} placeholders in filename templates.
-# "square" -> [Public]  [1-171362020]
-# "curly"  -> {Public}  {1-171362020}
-# "none"   -> Public    1-171362020   (no brackets)
+
 TIER_BRACKET   : str = CFG.get("tier_bracket",   "square")
 POSTID_BRACKET : str = CFG.get("postid_bracket", "square")
 
@@ -91,3 +89,67 @@ def get_folder(key: str, **kwargs) -> str:
     kwargs.setdefault("base",  BASE_DIR)
     kwargs.setdefault("media", MEDIA_FOLDER)
     return template.format(**kwargs)
+
+
+def _yaml_double_quote(value: str) -> str:
+    """Escape for a YAML double-quoted scalar on one line."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def persist_weverse_tokens_to_config(access_token: str, refresh_token: str) -> bool:
+    """
+    Replace auth_token and refresh token values in config.yaml in place.
+
+    Preserves the rest of the file (including comments) by rewriting only
+    matching top-level lines. Returns True if the file was written.
+    """
+    if not _CONFIG_PATH.exists():
+        return False
+    try:
+        text = _CONFIG_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+    def sub_key(txt: str, key: str, value: str) -> str:
+        q = _yaml_double_quote(value)
+        pat = re.compile(
+            rf"^([ \t]*{re.escape(key)}\s*:\s*)([^#\n]+?)(\s*#.*)?$",
+            re.MULTILINE,
+        )
+
+        def repl(m) -> str:
+            return m.group(1) + q + (m.group(3) or "")
+
+        if not pat.search(txt):
+            return txt
+        return pat.sub(repl, txt, count=1)
+
+    out = sub_key(text, "auth_token", access_token)
+    if re.search(r"^[ \t]*weverse_refresh_token\s*:", out, re.MULTILINE):
+        out = sub_key(out, "weverse_refresh_token", refresh_token)
+    elif re.search(r"^[ \t]*refresh_token\s*:", out, re.MULTILINE):
+        out = sub_key(out, "refresh_token", refresh_token)
+
+    if out == text:
+        return False
+    try:
+        _CONFIG_PATH.write_text(out, encoding="utf-8", newline="\n")
+        return True
+    except OSError:
+        return False
+
+
+def apply_weverse_tokens_in_memory(access_token: str, refresh_token: str) -> None:
+    """Keep module-level AUTH_TOKEN / CFG / COMMON_HEADERS aligned after a refresh."""
+    global AUTH_TOKEN
+
+    AUTH_TOKEN = access_token
+    CFG["auth_token"] = access_token
+    if "weverse_refresh_token" in CFG:
+        CFG["weverse_refresh_token"] = refresh_token
+    if "refresh_token" in CFG:
+        CFG["refresh_token"] = refresh_token
+    if "weverse_refresh_token" not in CFG and "refresh_token" not in CFG:
+        CFG["weverse_refresh_token"] = refresh_token
+    COMMON_HEADERS["Authorization"] = f"Bearer {access_token}"

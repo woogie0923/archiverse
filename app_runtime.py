@@ -112,9 +112,15 @@ class AppRuntime:
         state.TARGET_ARTISTS = parse_target_artists(self.args.artists)
         console.print(f"  [Config] Download Mode: {state.DOWNLOAD_TYPE.upper()}")
         try:
-            from weverse_auth import get_refresh_token
+            from weverse_auth import get_refresh_token, get_access_token
+
             if get_refresh_token():
                 console.print("  [Auth] Refresh token configured (auto-refresh enabled).")
+                try:
+                    # Sync COMMON_HEADERS before the first API call (expired auth_token in config).
+                    get_access_token()
+                except Exception as warm_e:
+                    console.print(f"  [Auth] Could not refresh access token at startup: {warm_e}")
             else:
                 console.print("  [Auth] Refresh token not set (using static auth_token only).")
         except Exception:

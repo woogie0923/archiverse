@@ -5,8 +5,9 @@ Optional Weverse account token refresh support for long-running
 DRM/live recording.
 
 If a `weverse_refresh_token` is configured, we can refresh the Weverse
-access token via accountapi.weverse.io and update `config.COMMON_HEADERS`
-in-memory for subsequent API calls and N_m3u8DL-RE requests.
+access token via accountapi.weverse.io, update `config.COMMON_HEADERS`
+in-memory, and persist the new access + refresh tokens into `config.yaml`
+when possible.
 """
 
 from __future__ import annotations
@@ -20,13 +21,39 @@ import requests
 
 import state
 from utils import console
-from config import CFG, COMMON_HEADERS
+from config import (
+    CFG,
+    COMMON_HEADERS,
+    apply_weverse_tokens_in_memory,
+    persist_weverse_tokens_to_config,
+)
 
 
 _REFRESH_ENDPOINT = "https://accountapi.weverse.io/api/v1/token/refresh"
 
 _X_ACC_APP_SECRET = "5419526f1c624b38b10787e5c10b2a7a"
 _X_ACC_APP_VERSION = "3.3.6"
+
+
+def _format_duration_dhm(seconds: int, *, include_zero_days: bool = False) -> str:
+    """
+    Format seconds as a compact 'Xd Yh Zm' string.
+
+    - Days and hours are omitted when zero (unless include_zero_days=True).
+    - Minutes are always included.
+    """
+    s = max(0, int(seconds or 0))
+    days = s // 86400
+    hours = (s % 86400) // 3600
+    mins = (s % 3600) // 60
+
+    parts: list[str] = []
+    if include_zero_days or days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    parts.append(f"{mins}m")
+    return " ".join(parts)
 
 
 def _token_cache_path() -> Path:
@@ -55,18 +82,27 @@ def _save_cached_token(data: dict):
 
 
 def get_refresh_token() -> str:
-    # Allow a couple of key names so users can choose what they have.
-    return (
-        str(CFG.get("weverse_refresh_token") or CFG.get("refresh_token") or "").strip()
-    )
+    """
+    Refresh token for accountapi.weverse.io.
+
+    Prefer the token stored in weverse_token.json after a successful refresh
+    (server may rotate it); fall back to config.
+    """
+    cached = _load_cached_token()
+    cached_rt = str(cached.get("refreshToken") or "").strip()
+    if cached_rt:
+        return cached_rt
+    return str(CFG.get("weverse_refresh_token") or CFG.get("refresh_token") or "").strip()
 
 
-def get_access_token(min_valid_seconds: int = 6 * 3600) -> str:
+def get_access_token(min_valid_seconds: int = 6 * 3600, *, force: bool = False) -> str:
     """
     Return a Weverse access token (raw token, not prefixed with "Bearer ").
 
     If a refresh token exists, refresh automatically when the cached token
     is close to expiring.
+
+    force=True: always POST /token/refresh (e.g. after HTTP 401 from the API).
     """
     cached = _load_cached_token()
     now = int(time.time())
@@ -74,12 +110,19 @@ def get_access_token(min_valid_seconds: int = 6 * 3600) -> str:
     access = cached.get("accessToken") or ""
 
     # If cached access token is still sufficiently valid, reuse it.
-    if access and expires and (expires - now) > min_valid_seconds:
+    if (
+        not force
+        and access
+        and expires
+        and (expires - now) > min_valid_seconds
+    ):
         COMMON_HEADERS["Authorization"] = f"Bearer {access}"
         if state.DEBUG_MODE:
-            remaining = expires - now
-            mins = max(0, remaining // 60)
-            console.print(f"  [Auth] Using cached Weverse access token (~{mins} min remaining).")
+            remaining = max(0, expires - now)
+            time_str = _format_duration_dhm(remaining, include_zero_days=True)
+            console.print(
+                f"  [Auth] Using cached Weverse access token (~{time_str} remaining)."
+            )
         return str(access)
 
     refresh_token = get_refresh_token()
@@ -120,8 +163,12 @@ def get_access_token(min_valid_seconds: int = 6 * 3600) -> str:
     }
     _save_cached_token(data)
 
-    COMMON_HEADERS["Authorization"] = f"Bearer {accessToken}"
-    # Always print a one-line notice when a refresh occurs so users can verify it.
-    mins = max(0, expiresIn // 60)
-    console.print(f"  [Auth] Refreshed Weverse access token via refresh token (valid for ~{mins} min).")
-    return str(accessToken)
+    apply_weverse_tokens_in_memory(accessToken, refreshToken)
+    time_str = _format_duration_dhm(expiresIn, include_zero_days=True)
+    console.print(
+        f"  [Auth] Refreshed Weverse access token via refresh token (valid for ~{time_str})."
+    )
+
+    if persist_weverse_tokens_to_config(accessToken, refreshToken):
+        console.print("  [Auth] Saved new tokens to config.yaml.")
+    return str(accessToken) 

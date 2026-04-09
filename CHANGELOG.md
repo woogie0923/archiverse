@@ -13,6 +13,11 @@ All notable changes to this project are recorded here. The history below follows
 
 ### Fixed
 
+- **401 handling** — when a Weverse API call fails with HTTP 401 (`account_401`), the app now refreshes the access token (when `weverse_refresh_token` is configured) and retries the request.
+- **Token refresh persistence** — refreshed access/refresh tokens are written back into `config.yaml` to keep future runs working without manual copy/paste.
+- **Streamlink muxing warnings (Windows)** — ongoing-live recording now passes `--ffmpeg-ffmpeg` using the path from `binaries.ffmpeg` (resolved via PATH when possible) so Streamlink can mux A/V reliably.
+- **Streamlink auth after refresh** — Streamlink now prefers the refreshed `COMMON_HEADERS` bearer token over the stale `auth_token` value.
+
 - **Remove ongoing-live option rows from the main Actions list**
 - **Ongoing lives MKV remux** — map only v/a/sub streams when remuxing TS recordings into Matroska to avoid Matroska header/codec-parameter failures.
 - **`downloaded.json` correctness across downloads** — only record a post as downloaded after the requested downloads/muxing succeed (covers ongoing lives, feed archivers in `processors.py`, and official media in `official_media.py` / `official_media_menu.py`).

@@ -401,8 +401,9 @@ def run_extr(extr, req, post=False, retries=None):
         else:
             console.print(f"  [yellow dim][API][/yellow dim] {_req_label(req)}")
 
-    attempt  = 0
+    attempt = 0
     last_exc = None
+    auth_refresh_done = False
 
     while retries is None or attempt < retries:
         try:
@@ -418,9 +419,29 @@ def run_extr(extr, req, post=False, retries=None):
 
         except Exception as e:
             last_exc = e
+            _e = str(e).lower()
+            is_401 = (
+                "401" in str(e)
+                or "account_401" in _e
+                or "unauthorized" in _e
+            )
+
+            if is_401 and not auth_refresh_done:
+                try:
+                    from weverse_auth import get_refresh_token, get_access_token
+
+                    if get_refresh_token():
+                        console.print(
+                            "  [Auth] HTTP 401 — refreshing access token and retrying…"
+                        )
+                        get_access_token(force=True)
+                        auth_refresh_done = True
+                        continue
+                except Exception as re_err:
+                    console.print(f"  [Auth] Token refresh failed: {re_err}")
+
             attempt += 1
 
-            _e = str(e).lower()
             is_access_denied = (
                 "does not have access" in _e
                 or "403" in str(e)

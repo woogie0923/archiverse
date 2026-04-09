@@ -482,7 +482,7 @@ def get_live_hls_url(video_id: str) -> tuple[str | None, bool]:
             from weverse_auth import get_refresh_token, get_access_token
             if get_refresh_token():
                 console.print("  [Live API] Access token error; refreshing token and retrying...")
-                get_access_token(min_valid_seconds=0)
+                get_access_token(force=True)
                 data = run_extr(make_extractor(), req, retries=3)
             else:
                 data = None
@@ -545,7 +545,7 @@ def record_ongoing_live_nm3u8dlre(
         try:
             from weverse_auth import get_refresh_token, get_access_token
             if get_refresh_token():
-                get_access_token(min_valid_seconds=0)
+                get_access_token(force=True)
         except Exception:
             pass
 
@@ -652,15 +652,31 @@ def _streamlink_weverse_user_agent() -> str:
 def _streamlink_weverse_authorization_value() -> str:
     """
     Value for --http-header Authorization=... (must be Bearer + JWT).
-    Prefer auth_token from config; else COMMON_HEADERS (e.g. after token refresh).
+    Prefer COMMON_HEADERS (updated by token refresh); fall back to config auth_token.
     """
+    h = (COMMON_HEADERS.get("Authorization") or "").strip()
+    if h.lower().startswith("bearer ") and len(h) > 7:
+        return h
     raw = (AUTH_TOKEN or "").strip()
     if raw:
         return f"Bearer {raw}"
-    h = (COMMON_HEADERS.get("Authorization") or "").strip()
-    if h.lower().startswith("bearer "):
-        return h
     return h
+
+
+def _streamlink_ffmpeg_path() -> str:
+    """
+    Resolve the ffmpeg executable path for Streamlink's ffmpegmux.
+
+    Streamlink sometimes fails to locate ffmpeg even if it's on PATH (common on Windows
+    when launched from certain shells/shortcuts). Supplying --ffmpeg-ffmpeg with an
+    explicit path makes muxing reliable.
+    """
+    ffmpeg_cfg = str(BINARIES.get("ffmpeg", "ffmpeg") or "").strip() or "ffmpeg"
+    try:
+        resolved = shutil.which(ffmpeg_cfg) if ffmpeg_cfg else None
+    except Exception:
+        resolved = None
+    return resolved or ffmpeg_cfg
 
 
 def _streamlink_preferred_ongoing_quality(streams: dict) -> str:
@@ -689,6 +705,8 @@ def _streamlink_list_streams(hls_url: str) -> dict:
         "--http-header",
         f"User-Agent={ua}",
     ]
+    if _streamlink_supports("--ffmpeg-ffmpeg"):
+        cmd.extend(["--ffmpeg-ffmpeg", _streamlink_ffmpeg_path()])
     if auth_val:
         cmd.extend(["--http-header", f"Authorization={auth_val}"])
     cmd.extend(["--http-header", "Referer=https://weverse.io/", hls_url])
@@ -786,6 +804,9 @@ def record_ongoing_live_streamlink(
         "--http-header",
         f"User-Agent={ua}",
     ]
+    if _streamlink_supports("--ffmpeg-ffmpeg"):
+        cmd.extend(["--ffmpeg-ffmpeg", _streamlink_ffmpeg_path()])
+    cmd.extend(["--ffmpeg-copyts"])
     if auth_val:
         cmd.extend(["--http-header", f"Authorization={auth_val}"])
     cmd.extend(
