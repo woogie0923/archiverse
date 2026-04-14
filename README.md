@@ -28,17 +28,28 @@ Use this software only in line with Weverse’s terms of service and applicable 
 
 ## Installation
 
-### Windows quick install
+### 1) Quick install (recommended)
 
-Run:
+Clone first:
 
-```bat
-install.bat
+```bash
+git clone https://github.com/woogie0923/archiverse.git archiverse
+cd archiverse
 ```
 
-It will create `config.yaml` from the template if missing.
+Then run the installer for your OS:
 
-### Manual install
+- **Windows:** `install.bat`
+- **macOS / Linux:** `./install.sh`
+
+What the installer does:
+- Installs `uv` if needed
+- Runs `uv sync` to install Python dependencies
+- Creates `config.yaml` from `config.yaml.template` if missing
+
+### 2) Manual install (fallback)
+
+Use this only if you do not want to use the installer scripts.
 
 ```bash
 git clone https://github.com/woogie0923/archiverse.git archiverse
@@ -46,12 +57,12 @@ cd archiverse
 python -m venv .venv
 ```
 
-Activate the virtual environment (examples):
+Activate the virtual environment:
 
 - **Windows (PowerShell):** `.\.venv\Scripts\Activate.ps1`
 - **macOS / Linux:** `source .venv/bin/activate`
 
-Then:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
