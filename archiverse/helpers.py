@@ -8,10 +8,10 @@ import os
 import re
 import shutil
 
-import state
+from . import state
 from pathlib import Path
 
-from utils import console, run_ffmpeg_with_progress
+from .utils import console, run_ffmpeg_with_progress
 
 
 def clear_screen():
@@ -84,7 +84,7 @@ def make_filename(artist: str, date, post_id: str, title: str = "", template_key
     """
     Build a filename stem using the template defined in config.yaml.
     """
-    from config import FILENAME_TEMPLATES, DATE_FORMAT, DATE_FORMATS, DATE_SEP, TIME_SEP, TIER_BRACKET, POSTID_BRACKET
+    from .config import FILENAME_TEMPLATES, DATE_FORMAT, DATE_FORMATS, DATE_SEP, TIME_SEP, TIER_BRACKET, POSTID_BRACKET
     import re as _re
     import datetime as _dt
 
@@ -154,7 +154,7 @@ def fix_metadata(item: dict) -> dict:
 
     title    = fix_surrogates(media.get("title") or "No Title")
     on_air   = video.get("onAirStartAt")
-    from config import TIMEZONE
+    from .config import TIMEZONE
     from zoneinfo import ZoneInfo
     try:
         tz = ZoneInfo(TIMEZONE)

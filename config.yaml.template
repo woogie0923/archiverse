@@ -14,7 +14,7 @@ auth_token: ""
 # Leave empty to use auth_token only.
 weverse_refresh_token: ""
 
-# Communities for the picker when you run: python archiverse.py (no -c).
+# Communities for the picker when you run: uv run archiverse (no -c) / python -m archiverse (no -c).
 menu_communities:
   - example-community-slug
 

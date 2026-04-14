@@ -5,12 +5,12 @@ Central runtime orchestration for CLI and interactive execution flows.
 from dataclasses import dataclass
 from typing import Any
 
-import state
-from api import make_extractor, run_extr
-from interactive_menu import CHANGE_COMMUNITY, interactive_menu, select_community_menu
-from live import get_key as live_get_key, process_lives
-from ongoing_live import process_ongoing_lives, select_ongoing_live_options
-from processors import (
+from . import state
+from .api import make_extractor, run_extr
+from .interactive_menu import CHANGE_COMMUNITY, interactive_menu, select_community_menu
+from .live import get_key as live_get_key, process_lives
+from .ongoing_live import process_ongoing_lives, select_ongoing_live_options
+from .processors import (
     process_artist_posts,
     process_member_profiles,
     process_moments,
@@ -20,7 +20,7 @@ from processors import (
     process_single_post,
 )
 from rich.text import Text
-from utils import console
+from .utils import console
 
 ACTION_ORDER = [
     "profile", "moments", "artist", "official", "media",
@@ -112,7 +112,7 @@ class AppRuntime:
         state.TARGET_ARTISTS = parse_target_artists(self.args.artists)
         console.print(f"  [Config] Download Mode: {state.DOWNLOAD_TYPE.upper()}")
         try:
-            from weverse_auth import get_refresh_token, get_access_token
+            from .weverse_auth import get_refresh_token, get_access_token
 
             if get_refresh_token():
                 console.print("  [Auth] Refresh token configured (auto-refresh enabled).")

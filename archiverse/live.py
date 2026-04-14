@@ -5,24 +5,24 @@ Interactive live stream menu, keyboard input handler, and live download logic.
 import time
 from pathlib import Path
 
-import utils
-from utils import console
-import state
-from config import BINARIES
-from api import fetch_lives_page
-from helpers import (
+from . import utils
+from .utils import console
+from . import state
+from .config import BINARIES
+from .api import fetch_lives_page
+from .helpers import (
     fix_metadata, get_author_name, get_filtered_items, 
     make_filename, sanitise
 )
-from download_cache import invalidate_video_url_cache_entry
-from downloader import (
+from .download_cache import invalidate_video_url_cache_entry
+from .downloader import (
     get_vod_url,
     download_drm_video,
     is_already_downloaded,
     mark_downloaded,
 )
 
-from terminal_input import get_key
+from .terminal_input import get_key
 
 
 def live_vod_thumbnail_url(item_data: dict, vod_playinfo_thumb: str = "") -> str:
@@ -65,7 +65,7 @@ def render_lives_menu(lives: list, page_idx: int, selected_ids: set, cursor_pos:
     from rich.table import Table
     from rich.text import Text
 
-    from menu_rich import cell, clear_menu_screen
+    from .menu_rich import cell, clear_menu_screen
 
     clear_menu_screen()
     console.print(
@@ -127,7 +127,7 @@ def process_lives(direct_id=None, debug=False):
         console.print("\n[Skip] Skipping Lives because --type is set to 'photo'.")
         return
 
-    from menu_rich import clear_menu_screen
+    from .menu_rich import clear_menu_screen
 
     clear_menu_screen()
     console.print(f"\n--- Live Stream Archive: {state.COMMUNITY_NAME} ---")
@@ -257,7 +257,7 @@ def download_single_live(item_data: dict, post_id: str | None = None):
     if not post_id:
         return
 
-    from text_writer import live_url
+    from .text_writer import live_url
     _live_url = live_url(state.COMMUNITY_NAME, post_id)
 
     video_id = item_data.get("extension", {}).get("video", {}).get("videoId")
@@ -303,7 +303,7 @@ def download_single_live(item_data: dict, post_id: str | None = None):
     safe_filename = _safe_fs_stem(filename)
 
     tier      = "Membership" if is_mem else "Public"
-    from config import get_folder
+    from .config import get_folder
     lives_dir = Path(
         get_folder(
             "lives",
@@ -345,7 +345,7 @@ def download_single_live(item_data: dict, post_id: str | None = None):
             mark_downloaded(post_id)
 
         if state.SAVE_TEXT:
-            from text_writer import save_live_chat, save_live_artist_chat
+            from .text_writer import save_live_chat, save_live_artist_chat
             save_live_chat(post_id, str(lives_dir), safe_filename)
             save_live_artist_chat(post_id, str(lives_dir), safe_filename)
         return
@@ -440,7 +440,7 @@ def download_single_live(item_data: dict, post_id: str | None = None):
             if thumb_matches:
                 thumb_path = thumb_matches[0]
 
-        from text_writer import live_url
+        from .text_writer import live_url
         weverse_url = live_url(state.COMMUNITY_NAME, post_id)
         live_title  = meta.get("title", "")
 
@@ -504,7 +504,7 @@ def download_single_live(item_data: dict, post_id: str | None = None):
             except Exception:
                 pass
             if state.SAVE_TEXT:
-                from text_writer import save_live_chat, save_live_artist_chat
+                from .text_writer import save_live_chat, save_live_artist_chat
                 save_live_chat(post_id, str(lives_dir), safe_filename)
                 save_live_artist_chat(post_id, str(lives_dir), safe_filename)
             if final_path.exists():

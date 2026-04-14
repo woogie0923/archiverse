@@ -4,16 +4,42 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
-## 2026-04-14
+## 2026-04-15 (v0.1.2)
+
+### Added
+
+- **Main menu auth activity lines** — interactive menu now also shows the latest token activity:
+  - `[Auth] Using cached Weverse access token (~… remaining).`
+  - `[Auth] Refreshed Weverse access token via refresh token (valid for ~…).`
+  - `[Auth] Saved new tokens to config.yaml.`
+
+### Changed
+
+- **Auth status propagation** — token usage/refresh messages are now persisted in shared runtime state so the interactive menu can render them consistently.
+
+---
+
+## 2026-04-14 (v0.1.1)
 
 ### Fixed
 
 - **Text exports: attachment formatting** — `<w:attachment .../>` placeholders are now treated as line breaks so text doesn’t get glued together (e.g. before hashtags).
 - **Text exports: YouTube/snippet links** — YouTube links are appended to the end of the saved `.txt` (official posts: `attachment.snippet[].url`, official media: `extension.youtube.videoPath`), and URL-only `.txt` files are created even when the post body is empty.
 
+### Added
+
+- **Package layout** — all Python modules moved under the `archiverse/` package; `uv run archiverse` and `python -m archiverse` work from repo root.
+- **Windows installer** — `install.bat` to bootstrap dependencies and create `config.yaml` from the template.
+- **macOS/Linux installer** — `install.sh` with the same behavior (prefers `uv`, falls back to `.venv` + pip).
+
+### Changed
+
+- **CLI invocation** — prefer `uv run archiverse ...` (or `python -m archiverse ...`) instead of running `archiverse.py` directly.
+- **Docs** — updated remaining examples and template comments that referenced `python archiverse.py`.
+
 ---
 
-## 2026-04-06
+## 2026-04-06 (v0.1.0)
 
 ### Fixed
 
@@ -30,7 +56,7 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
-## 2026-03-29
+## 2026-03-29 (v0.0.2)
 
 ### Added
 
@@ -54,7 +80,7 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
-## 2026-03-28
+## 2026-03-28 (v0.0.1)
 
 ### Added
 

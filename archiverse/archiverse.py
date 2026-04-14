@@ -5,7 +5,7 @@ processor functions. Interactive TUI menus live in interactive_menu.py.
 """
 import argparse
 
-from app_runtime import AppRuntime
+from .app_runtime import AppRuntime
 
 CLI_EPILOG = """
 Prerequisites:
@@ -22,15 +22,18 @@ Features:
     - Subtitle muxing for live VODs
 
 Usage Examples:
-    python archiverse.py -c fromis9 --debug
-    python archiverse.py -c stayc -a all --profile
-    python archiverse.py -c RedVelvet -a IRENE SEULGI --moments
-    python archiverse.py -c fromis9 --live 4-12345678
-    python archiverse.py -c fromis9 -a "LEE SEO YEON" --artist --type photo
-    python archiverse.py -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673
-    python archiverse.py -c fromis9 --media 4-223153860
-    python archiverse.py -c APINK --media-menu
-    python archiverse.py -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public
+    uv run archiverse -c fromis9 --debug
+    uv run archiverse -c stayc -a all --profile
+    uv run archiverse -c RedVelvet -a IRENE SEULGI --moments
+    uv run archiverse -c fromis9 --live 4-12345678
+    uv run archiverse -c fromis9 -a "LEE SEO YEON" --artist --type photo
+    uv run archiverse -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673
+    uv run archiverse -c fromis9 --media 4-223153860
+    uv run archiverse -c APINK --media-menu
+    uv run archiverse -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public
+
+    # Alternative (without uv):
+    python -m archiverse -c fromis9 --debug
 
 Data Location Guide:
     - Community Name : slug from the URL  (e.g. 'stayc' from weverse.io/stayc)
@@ -138,7 +141,7 @@ def main():
                               "Overrides download_history_enabled in config.yaml.")
 
     args = parser.parse_args()
-    from config import CFG
+    from .config import CFG
     menu_list = CFG.get("menu_communities") or []
     if not isinstance(menu_list, list):
         menu_list = []
@@ -156,5 +159,5 @@ if __name__ == "__main__":
     try:
         main()
     finally:
-        from utils import stop_progress
+        from .utils import stop_progress
         stop_progress()

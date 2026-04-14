@@ -12,17 +12,17 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import state
-from api import fetch_onair_lives
-from downloader import (
+from . import state
+from .api import fetch_onair_lives
+from .downloader import (
     get_live_hls_url,
     is_already_downloaded,
     mark_downloaded,
     record_ongoing_live_streamlink,
     download_ongoing_live_subtitles_nm3u8dlre,
 )
-from helpers import get_author_name, make_filename, sanitise, mux_subtitles_into_video
-from utils import console, edit_creation_date
+from .helpers import get_author_name, make_filename, sanitise, mux_subtitles_into_video
+from .utils import console, edit_creation_date
 
 
 def select_ongoing_live_options() -> dict | str | None:
@@ -34,11 +34,11 @@ def select_ongoing_live_options() -> dict | str | None:
       - "back" when user cancels
       - "quit" when user requests program exit
     """
-    from terminal_input import get_key
+    from .terminal_input import get_key
     from rich.table import Table
     from rich.text import Text
 
-    from menu_rich import clear_menu_screen
+    from .menu_rich import clear_menu_screen
 
     download_only = "both"   # both|video|subs
     mux_subs = False
@@ -155,7 +155,7 @@ def _parse_published_at(published_at) -> datetime | None:
 
     tz_name = None
     try:
-        from config import TIMEZONE
+        from .config import TIMEZONE
         tz_name = TIMEZONE
     except Exception:
         tz_name = "Asia/Seoul"
@@ -237,7 +237,7 @@ def _compute_output(file_info: dict) -> tuple[Path, str]:
     """
     Compute lives output directory and a filename stem.
     """
-    from config import get_folder
+    from .config import get_folder
 
     artist_name = get_author_name(file_info.get("author", {}))
     clean_artist = sanitise(artist_name)
@@ -278,7 +278,7 @@ def _record_one(file_info: dict, poll_conf: dict):
       - Streamlink for video (.mp4 or .mkv from --ongoing-live-output-format)
       - Optional N_m3u8DL-RE for subtitles
     """
-    from text_writer import embed_url_metadata, live_url
+    from .text_writer import embed_url_metadata, live_url
 
     post_id = file_info["post_id"]
     video_id = file_info["video_id"]

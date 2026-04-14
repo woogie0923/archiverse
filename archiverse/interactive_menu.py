@@ -4,11 +4,11 @@ Interactive TUI: community picker and main archive menu (filters, artists, actio
 import json
 from pathlib import Path
 
-import state
+from . import state
 from rich.text import Text
-from utils import console
-from api import make_extractor, run_extr, menu_status_board_renderable
-from config import CFG, get_folder
+from .utils import console
+from .api import make_extractor, run_extr, menu_status_board_renderable
+from .config import CFG, get_folder
 
 CHANGE_COMMUNITY = "__CHANGE_COMMUNITY__"
 
@@ -18,10 +18,10 @@ def select_community_menu(communities: list[str]) -> str | None:
     Keyboard menu: pick a community slug from config.
     Returns the chosen slug, or None if the user quits.
     """
-    from live import get_key
+    from .live import get_key
     from rich.table import Table
 
-    from menu_rich import cell, clear_menu_screen
+    from .menu_rich import cell, clear_menu_screen
 
     if not communities:
         return None
@@ -57,7 +57,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
     Sections (top to bottom): Filters, Artists, Official Channels, Archive, Actions.
     Navigate with arrow keys; Tab/→ advances section, ←/B goes back (Archive and Actions are separate steps).
     """
-    from live import get_key
+    from .live import get_key
 
     artist_profiles = []
     _prev_debug = state.DEBUG_MODE
@@ -98,13 +98,23 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
             official_channels.append({"memberId": mid, "profileName": name})
 
     try:
-        from weverse_auth import get_refresh_token
+        from .weverse_auth import get_refresh_token
         if get_refresh_token():
             auth_status_text = Text("  [Auth] Refresh token configured (auto-refresh enabled).", style="dim")
         else:
             auth_status_text = Text("  [Auth] Refresh token not set (using static auth_token only).", style="dim")
     except Exception:
         auth_status_text = Text("  [Auth] Refresh-token status unavailable.", style="dim")
+
+    # Append latest auth activity (cached token / refresh / config update) to the menu header.
+    try:
+        if state.AUTH_STATUS_LINES:
+            auth_status_text = Text(
+                auth_status_text.plain + "\n" + "\n".join(state.AUTH_STATUS_LINES),
+                style="dim",
+            )
+    except Exception:
+        pass
 
     # Each filter is a list of (display_label, state_values) tuples.
     # Space cycles forward through options; the active index is stored.
@@ -235,7 +245,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
     from rich.padding import Padding
     from rich.console import Group
 
-    from menu_rich import clear_menu_screen
+    from .menu_rich import clear_menu_screen
 
     def _build_renderable():
         from rich.markup import escape

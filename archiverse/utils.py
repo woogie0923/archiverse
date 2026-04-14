@@ -38,7 +38,7 @@ def _mux_progress_label(description: str) -> str:
 
 def ffprobe_duration_seconds(path: Path) -> float | None:
     """Return container duration in seconds, or None if unknown."""
-    from config import BINARIES
+    from .config import BINARIES
 
     name = BINARIES.get("ffprobe", "ffprobe")
     ffprobe = shutil.which(name) or name
@@ -267,7 +267,7 @@ def isotime(date_str: str) -> datetime.datetime:
 
 
 def timestamp(ts) -> datetime.datetime:
-    from config import TIMEZONE
+    from .config import TIMEZONE
     ts_seconds = ts / 1000
     try:
         tz = ZoneInfo(TIMEZONE)

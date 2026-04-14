@@ -25,7 +25,7 @@ def get_key() -> str | None:
 def debug_keys(n: int = 5) -> None:
     """Press n keys and print the exact bytes received via setraw + read(1).
     Run this to diagnose what escape sequences your terminal actually sends.
-    Usage: python -c "from terminal_input import debug_keys; debug_keys()"
+    Usage: python -c "from archiverse.terminal_input import debug_keys; debug_keys()"
     """
     import select
     import termios

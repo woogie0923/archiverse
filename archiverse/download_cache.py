@@ -13,9 +13,9 @@ import datetime as _dt
 import json
 from pathlib import Path
 
-import state
-from config import get_folder
-from utils import console
+from . import state
+from .config import get_folder
+from .utils import console
 
 # {community: set of post_id strings}
 _dl_history_cache: dict = {}

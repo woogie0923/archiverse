@@ -19,13 +19,13 @@ import requests
 import xmltodict
 from pywidevine import PSSH, Device, Cdm
 
-import utils
-from utils import console
-import state
-from config import AUTH_TOKEN, COMMON_HEADERS, BINARIES, WVD_DEVICE_PATH, get_folder
-from api import make_extractor, run_extr
-from helpers import mux_media_with_subtitles
-from download_cache import (
+from . import utils
+from .utils import console
+from . import state
+from .config import AUTH_TOKEN, COMMON_HEADERS, BINARIES, WVD_DEVICE_PATH, get_folder
+from .api import make_extractor, run_extr
+from .helpers import mux_media_with_subtitles
+from .download_cache import (
     _get_logged_command,
     _load_drm_keys,
     _load_video_url_cache,
@@ -211,7 +211,7 @@ def download_drm_video(
                     if thumb_url:
                         _embed_thumbnail_drm(output_file, thumb_url)
                     if weverse_url:
-                        from text_writer import embed_url_metadata
+                        from .text_writer import embed_url_metadata
                         embed_url_metadata(str(output_file), weverse_url, title=title)
                     # Set Windows "Created" timestamp. Prefer provided created_at,
                     # otherwise fall back to parsing YYYY-MM-DD from filename.
@@ -348,7 +348,7 @@ def download_drm_video(
             if thumb_url:
                 _embed_thumbnail_drm(output_file, thumb_url)
             if weverse_url:
-                from text_writer import embed_url_metadata
+                from .text_writer import embed_url_metadata
                 embed_url_metadata(str(output_file), weverse_url, title=title)
             try:
                 if created_at:
@@ -479,7 +479,7 @@ def get_live_hls_url(video_id: str) -> tuple[str | None, bool]:
         data = run_extr(make_extractor(), req, retries=3)
     except Exception as e:
         try:
-            from weverse_auth import get_refresh_token, get_access_token
+            from .weverse_auth import get_refresh_token, get_access_token
             if get_refresh_token():
                 console.print("  [Live API] Access token error; refreshing token and retrying...")
                 get_access_token(force=True)
@@ -543,7 +543,7 @@ def record_ongoing_live_nm3u8dlre(
 
     if is_drm_like:
         try:
-            from weverse_auth import get_refresh_token, get_access_token
+            from .weverse_auth import get_refresh_token, get_access_token
             if get_refresh_token():
                 get_access_token(force=True)
         except Exception:

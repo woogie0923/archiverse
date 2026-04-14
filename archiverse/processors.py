@@ -8,24 +8,24 @@ import re
 import time
 from pathlib import Path
 
-import utils
-from utils import console
-import state
-from config import DOWNLOAD_SLEEP, STOP_THRESHOLD, get_folder
-from text_writer import (
+from . import utils
+from .utils import console
+from . import state
+from .config import DOWNLOAD_SLEEP, STOP_THRESHOLD, get_folder
+from .text_writer import (
     save_post_text, embed_url_metadata,
     artist_post_url, moment_url, official_post_url,
 )
-from api import make_extractor, run_extr, fetch_post_details, register_member_name
-from helpers import (
+from .api import make_extractor, run_extr, fetch_post_details, register_member_name
+from .helpers import (
     get_author_name, make_filename, matches_target, sanitise
 )
-from downloader import (
+from .downloader import (
     is_already_downloaded, download_cvideo,
     get_official_video_url, mark_downloaded
 )
-from official_media import process_official_media
-from official_media_menu import process_official_media_menu
+from .official_media import process_official_media
+from .official_media_menu import process_official_media_menu
 
 
 def process_single_post(post_id: str):
@@ -522,7 +522,7 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
 
 def process_artist_posts():
     """Archive individual artist posts (photos and videos)."""
-    from config import CFG as _CFG
+    from .config import CFG as _CFG
 
     console.print(f"\nProcessing Artist Posts for {state.COMMUNITY_NAME}...")
     artists_data = run_extr(

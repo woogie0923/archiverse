@@ -11,11 +11,11 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 
-import state
-import utils
-from utils import console
-from config import BINARIES
-from api import make_extractor, run_extr
+from . import state
+from . import utils
+from .utils import console
+from .config import BINARIES
+from .api import make_extractor, run_extr
 
 
 def _clean_post_body_text(raw: str) -> str:
@@ -61,7 +61,7 @@ def embed_url_metadata(file_path: str, url: str, title: str = ""):
 
     import subprocess
     from pathlib import Path
-    from config import BINARIES
+    from .config import BINARIES
 
     target_file = Path(file_path)
 
@@ -219,7 +219,7 @@ def _embed_video(video_file: Path, url: str):
 def _embed_mkv_url(video_file: Path, url: str):
     """Embed URL into MKV global metadata (Comment field)."""
     try:
-        from config import BINARIES
+        from .config import BINARIES
         import subprocess
         mkvpropedit = BINARIES.get("mkvpropedit", "mkvpropedit")
         cmd = [mkvpropedit, str(video_file), "--edit", "info", "--set", f"comment={url}"]
@@ -369,7 +369,7 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
     raw_pid = post.get("postId")
     pid_str = str(raw_pid).strip() if raw_pid is not None and raw_pid != "" else ""
     if pid_str:
-        from download_cache import _load_dl_history
+        from .download_cache import _load_dl_history
         if pid_str in _load_dl_history(): return
 
     raw_body = (post.get("body") or post.get("plainBody") or "").strip()
@@ -569,7 +569,7 @@ def _fetch_artist_chat_page(chat_id: str, cursor: str | None) -> tuple[list, str
 def _format_chat_lines(messages: list) -> list[str]:
     """Convert a list of raw chat message dicts to formatted log lines."""
     from zoneinfo import ZoneInfo
-    from config import TIMEZONE
+    from .config import TIMEZONE
     import datetime as _dt
     try:
         tz = ZoneInfo(TIMEZONE)

@@ -9,25 +9,25 @@ import re
 import time as _time
 from pathlib import Path
 
-import utils
-from utils import console
-import state
-from config import DOWNLOAD_SLEEP, get_folder
-from text_writer import embed_url_metadata, media_url
-from api import make_extractor, run_extr, fetch_post_details
-from helpers import get_author_name, make_filename, sanitise_surrogates
-from downloader import (
+from . import utils
+from .utils import console
+from . import state
+from .config import DOWNLOAD_SLEEP, get_folder
+from .text_writer import embed_url_metadata, media_url
+from .api import make_extractor, run_extr, fetch_post_details
+from .helpers import get_author_name, make_filename, sanitise_surrogates
+from .downloader import (
     is_already_downloaded,
     download_cvideo,
     download_drm_video,
     mark_downloaded,
 )
-from live import get_key
+from .live import get_key
 from rich.table import Table
 from rich.text import Text
 
-from menu_rich import cell, clear_menu_screen
-from official_media import _embed_thumbnail
+from .menu_rich import cell, clear_menu_screen
+from .official_media import _embed_thumbnail
 
 
 def process_official_media_menu():

@@ -19,9 +19,9 @@ from pathlib import Path
 
 import requests
 
-import state
-from utils import console
-from config import (
+from . import state
+from .utils import console
+from .config import (
     CFG,
     COMMON_HEADERS,
     apply_weverse_tokens_in_memory,
@@ -117,12 +117,12 @@ def get_access_token(min_valid_seconds: int = 6 * 3600, *, force: bool = False) 
         and (expires - now) > min_valid_seconds
     ):
         COMMON_HEADERS["Authorization"] = f"Bearer {access}"
+        remaining = max(0, expires - now)
+        time_str = _format_duration_dhm(remaining, include_zero_days=True)
+        msg = f"  [Auth] Using cached Weverse access token (~{time_str} remaining)."
+        state.AUTH_STATUS_LINES = [msg]
         if state.DEBUG_MODE:
-            remaining = max(0, expires - now)
-            time_str = _format_duration_dhm(remaining, include_zero_days=True)
-            console.print(
-                f"  [Auth] Using cached Weverse access token (~{time_str} remaining)."
-            )
+            console.print(msg)
         return str(access)
 
     refresh_token = get_refresh_token()
@@ -165,10 +165,12 @@ def get_access_token(min_valid_seconds: int = 6 * 3600, *, force: bool = False) 
 
     apply_weverse_tokens_in_memory(accessToken, refreshToken)
     time_str = _format_duration_dhm(expiresIn, include_zero_days=True)
-    console.print(
-        f"  [Auth] Refreshed Weverse access token via refresh token (valid for ~{time_str})."
-    )
+    msg_refresh = f"  [Auth] Refreshed Weverse access token via refresh token (valid for ~{time_str})."
+    state.AUTH_STATUS_LINES = [msg_refresh]
+    console.print(msg_refresh)
 
     if persist_weverse_tokens_to_config(accessToken, refreshToken):
-        console.print("  [Auth] Saved new tokens to config.yaml.")
+        msg_saved = "  [Auth] Saved new tokens to config.yaml."
+        state.AUTH_STATUS_LINES = [msg_refresh, msg_saved]
+        console.print(msg_saved)
     return str(accessToken) 

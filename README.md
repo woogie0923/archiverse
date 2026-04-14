@@ -1,6 +1,6 @@
 # Archiverse
 
-An all-in-one command-line tool to archive photos, videos, lives, and text from [Weverse](https://weverse.io/) communities you have access to. It supports artist posts, moments, official channels, the media tab, live VODs, and optional recording of currently on-air streams.
+An all-in-one command-line tool to archive photos, videos, lives, and texts (texts from posts and artist comments) from [Weverse](https://weverse.io/) communities you have access to. It supports artist posts, moments, official channels, the media tab, live VODs, and optional recording of currently on-air streams.
 
 This project is based on [Weverse Archive](https://github.com/honeyedoasis/WeverseArchive) and some scripts from a friend.
 
@@ -10,7 +10,7 @@ This project is based on [Weverse Archive](https://github.com/honeyedoasis/Wever
 
 ## Prerequisites
 
-- **Python 3.9+** (uses `zoneinfo` in the standard library)
+- **Python 3.10+** (Streamlink requires Python 3.10+; uses `zoneinfo` in the standard library)
 - **PyPI dependencies** — see [`requirements.txt`](requirements.txt)
 - **External programs** (install separately and/or set full paths in `config.yaml`):
   - [FFmpeg](https://ffmpeg.org/) (and **ffprobe**, usually in the same install — used for mux/remux progress)
@@ -28,6 +28,18 @@ Use this software only in line with Weverse’s terms of service and applicable 
 
 ## Installation
 
+### Windows quick install
+
+Run:
+
+```bat
+install.bat
+```
+
+It will create `config.yaml` from the template if missing.
+
+### Manual install
+
 ```bash
 git clone https://github.com/woogie0923/archiverse.git archiverse
 cd archiverse
@@ -43,6 +55,14 @@ Then:
 
 ```bash
 pip install -r requirements.txt
+```
+
+### Using `uv` (recommended)
+
+If you have [`uv`](https://github.com/astral-sh/uv) installed, you can run without manual venv management:
+
+```bash
+uv run archiverse --help
 ```
 
 Create your config from the template:
@@ -62,7 +82,9 @@ Edit **`config.yaml`**: set `auth_token`, `wvd_device_path`, `base_dir`, `menu_c
 Show full help:
 
 ```bash
-python archiverse.py --help
+uv run archiverse --help
+# or:
+python -m archiverse --help
 ```
 
 ### Interactive mode (no action flags)
@@ -70,42 +92,51 @@ python archiverse.py --help
 If `menu_communities` is set in `config.yaml`, you can run:
 
 ```bash
-python archiverse.py
+uv run archiverse
+# or:
+python -m archiverse
 ```
 
 You will get a community picker and then the main menu.
 
 ```bash
-python archiverse.py -c fromis9
+uv run archiverse -c fromis9
+# or:
+python -m archiverse -c fromis9
 ```
 
 ### Non-interactive examples (action flags require `-c`)
 
 | Goal | Example |
 |------|---------|
-| Debug API URLs | `python archiverse.py -c fromis9 --debug` |
-| All artists: profiles | `python archiverse.py -c STAYC -a all --profile` |
-| Selected artists: moments | `python archiverse.py -c RedVelvet -a IRENE SEULGI --moments` |
-| Live menu or direct live ID | `python archiverse.py -c Apink --live` / `python archiverse.py -c fromis9 --live 4-12345678` |
-| Artist posts, photos only | `python archiverse.py -c fromis9 -a "SONG HA YOUNG" --artist --type photo` |
-| Official channel by member ID | `python archiverse.py -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673` |
-| Official media tab | `python archiverse.py -c aespa --media` / `python archiverse.py -c aespa --media 4-223153860` |
-| Official media browser | `python archiverse.py -c APINK --media-menu` |
-| Text + comments only | `python archiverse.py -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public` |
+| Debug API URLs | `uv run archiverse -c fromis9 --debug` |
+| All artists: profiles | `uv run archiverse -c STAYC -a all --profile` |
+| Selected artists: moments | `uv run archiverse -c RedVelvet -a IRENE SEULGI --moments` |
+| Live menu or direct live ID | `uv run archiverse -c Apink --live` / `uv run archiverse -c fromis9 --live 4-12345678` |
+| Artist posts, photos only | `uv run archiverse -c fromis9 -a "SONG HA YOUNG" --artist --type photo` |
+| Official channel by member ID | `uv run archiverse -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673` |
+| Official media tab | `uv run archiverse -c aespa --media` / `uv run archiverse -c aespa --media 4-223153860` |
+| Official media browser | `uv run archiverse -c APINK --media-menu` |
+| Text + comments only | `uv run archiverse -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public` |
 
 ### Ongoing (on-air) live recording
 
 Poll Weverse for currently live streams and record with **Streamlink** (then remux with FFmpeg). Subtitles after the fact can use N_m3u8DL-RE:
 
 ```bash
-python archiverse.py -c fromis9 --ongoing-live-monitor
+uv run archiverse -c fromis9 --ongoing-live-monitor
+# or:
+python -m archiverse -c fromis9 --ongoing-live-monitor
 ```
 
 Record what is on air once (optional match string for post / video / URL):
 
 ```bash
-python archiverse.py -c fromis9 --ongoing-live-now
-python archiverse.py -c fromis9 --ongoing-live-now "4-1234567890"
+uv run archiverse -c fromis9 --ongoing-live-now
+uv run archiverse -c fromis9 --ongoing-live-now "4-1234567890"
+# or:
+python -m archiverse -c fromis9 --ongoing-live-now
+python -m archiverse -c fromis9 --ongoing-live-now "4-1234567890"
 ```
 
 Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-download-only {both,video,subs}`, `--ongoing-live-mux-subs` (embed downloaded subtitles into the recorded video container), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking). The `--ongoing-live-chat` flag is reserved for future use (ongoing chat is not archived yet).
@@ -159,8 +190,8 @@ Timezone for filenames and text headers is controlled by **`timezone`** (IANA na
 
 | Path | Role |
 |------|------|
-| `archiverse.py` | CLI entry point |
-| `app_runtime.py` | Wires CLI flags to menus and actions |
+| `archiverse/` | Python package (CLI + all modules) |
+| `archiverse/__main__.py` | Enables `python -m archiverse` |
 | `config.yaml` | Your local configuration (not in template) |
 | `config.yaml.template` | Safe template for new setups |
 | `interactive_menu.py` / `live.py` | TUI menus and live flows |
@@ -169,6 +200,10 @@ Timezone for filenames and text headers is controlled by **`timezone`** (IANA na
 | `downloader.py` / `api.py` | Downloads and Weverse API helpers |
 | `download_cache.py` | Per-community caches (`downloaded.json`, DRM keys, VOD URL cache, etc.) |
 | `weverse_auth.py` | Optional access-token refresh using `weverse_refresh_token` |
+
+## License
+
+This project is licensed under the **MIT License**. See [`LICENSE`](LICENSE).
 
 ## TO-DO
 - Support for on-air membership livestreams

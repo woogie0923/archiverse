@@ -12,7 +12,7 @@ except ImportError:
     print("[Error] PyYAML is not installed. Run: pip install pyyaml")
     sys.exit(1)
 
-_CONFIG_PATH = Path(__file__).parent / "config.yaml"
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 
 
 def _load() -> dict:

@@ -16,10 +16,10 @@ from pathlib import Path
 
 import requests
 
-import state
-from utils import console
+from . import state
+from .utils import console
 from rich.text import Text
-from config import (
+from .config import (
     COMMON_HEADERS, WEVERSE_API_BASE, WEVERSE_HMAC_KEY,
     get_folder, CACHE_ENABLED,
 )
@@ -428,7 +428,7 @@ def run_extr(extr, req, post=False, retries=None):
 
             if is_401 and not auth_refresh_done:
                 try:
-                    from weverse_auth import get_refresh_token, get_access_token
+                    from .weverse_auth import get_refresh_token, get_access_token
 
                     if get_refresh_token():
                         console.print(

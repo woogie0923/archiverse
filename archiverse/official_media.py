@@ -9,14 +9,14 @@ import re
 import time
 from pathlib import Path
 
-import utils
-from utils import console
-import state
-from config import PAGED_SLEEP, get_folder
-from text_writer import save_post_text, embed_url_metadata, media_url
-from api import make_extractor, run_extr, fetch_post_details
-from helpers import get_author_name, make_filename, sanitise_surrogates
-from downloader import (
+from . import utils
+from .utils import console
+from . import state
+from .config import PAGED_SLEEP, get_folder
+from .text_writer import save_post_text, embed_url_metadata, media_url
+from .api import make_extractor, run_extr, fetch_post_details
+from .helpers import get_author_name, make_filename, sanitise_surrogates
+from .downloader import (
     is_already_downloaded,
     download_cvideo,
     download_drm_video,
@@ -31,8 +31,8 @@ def _embed_thumbnail(video_path_stem: str, thumb_url: str, url_meta: str = "", t
     """
     from pathlib import Path as _Path
     import subprocess as _sp
-    from config import BINARIES as _BINS
-    import utils as _utils
+    from .config import BINARIES as _BINS
+    from . import utils as _utils
 
     stem = _Path(video_path_stem)
     matches = [
