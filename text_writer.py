@@ -28,6 +28,11 @@ def _clean_post_body_text(raw: str) -> str:
     if not raw:
         return ""
     s = raw.strip()
+    # Weverse uses <w:attachment .../> placeholders inside body text. When we
+    # strip tags, these can accidentally glue adjacent text together (e.g.
+    # "...channel:<w:attachment .../>#TAG" -> "...channel:#TAG"). Treat them as
+    # a line break to preserve the original post formatting.
+    s = re.sub(r"<w:attachment\b[^>]*/\s*>", "\n", s)
     s = re.sub(r"</?w:[^>]+>", "", s)
     s = html.unescape(s)
     s = re.sub(r"\n{3,}", "\n\n", s).strip()
@@ -386,7 +391,36 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
     if not body and post_body_from_api:
         body = post_body_from_api
 
-    if not body and not comments: return
+    # External links (YouTube, etc.) embedded as snippet / official media metadata.
+    urls: list[str] = []
+    try:
+        # Official-channel posts sometimes include "attachment.snippet" items (e.g. YouTube share).
+        att = post.get("attachment") or {}
+        snips = att.get("snippet") or {}
+        if isinstance(snips, dict):
+            for v in snips.values():
+                if isinstance(v, dict):
+                    u = (v.get("url") or "").strip()
+                    if u:
+                        urls.append(u)
+
+        # Official Media tab posts can include extension.youtube.videoPath.
+        ext = post.get("extension") or {}
+        yt = ext.get("youtube") or {}
+        if isinstance(yt, dict):
+            u = (yt.get("videoPath") or "").strip()
+            if u:
+                urls.append(u)
+    except Exception:
+        urls = urls or []
+
+    # De-dup while preserving order.
+    if urls:
+        seen: set[str] = set()
+        urls = [u for u in urls if not (u in seen or seen.add(u))]
+
+    if not body and not comments and not urls:
+        return
 
     txt_path.parent.mkdir(parents=True, exist_ok=True)
     author = post.get("author", {})
@@ -395,10 +429,10 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
 
     lines = [f"Post ID   : {post.get('postId', '')}", f"Artist    : {author_name}", f"Date      : {pub_at}"]
     if weverse_url: lines.append(f"URL       : {weverse_url}")
-    lines.append("\u2500" * 52)
+    lines.append("\u2500" * 55)
     if body: lines.append(body)
     if comments:
-        lines.append("\n" + "\u2500\u2500 Artist Comments " + "\u2500" * 38)
+        lines.append("\n" + "\u2500" * 19 + " Artist Comments " + "\u2500" * 19)
         # Build a set of comment IDs that belong to artist comments to
         # detect when an artist replied to their own comment.
         artist_comment_ids = {c["commentId"] for c in comments if c.get("commentId")}
@@ -423,6 +457,10 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
                     lines.append(f"    \u2514 [{c['timestamp']}] {c['authorName']}: {c['body']}")
             else:
                 lines.append(f"[{c['timestamp']}] {c['authorName']}: {c['body']}")
+
+    if urls:
+        lines.append("\n" + "\u2500" * 24 + " Links " + "\u2500" * 24)
+        lines.extend(urls)
 
     txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     console.print(f"  [Text] Saved: {txt_path.name}")

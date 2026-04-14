@@ -4,6 +4,15 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-04-14
+
+### Fixed
+
+- **Text exports: attachment formatting** — `<w:attachment .../>` placeholders are now treated as line breaks so text doesn’t get glued together (e.g. before hashtags).
+- **Text exports: YouTube/snippet links** — YouTube links are appended to the end of the saved `.txt` (official posts: `attachment.snippet[].url`, official media: `extension.youtube.videoPath`), and URL-only `.txt` files are created even when the post body is empty.
+
+---
+
 ## 2026-04-06
 
 ### Fixed
