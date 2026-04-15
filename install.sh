@@ -27,15 +27,28 @@ else
     exit 1
   fi
 
-  # Common install location is ~/.local/bin; make it available for this script run.
-  if [ -x "$HOME/.local/bin/uv" ]; then
-    PATH="$HOME/.local/bin:$PATH"
+  # Try common install locations for this script run.
+  UV_BIN=""
+  for d in "$HOME/.local/bin" "$HOME/.cargo/bin" "/usr/local/bin"; do
+    if [ -x "$d/uv" ]; then
+      UV_BIN="$d"
+      break
+    fi
+  done
+  if [ -n "$UV_BIN" ]; then
+    PATH="$UV_BIN:$PATH"
     export PATH
   fi
 
   # Verify
   if ! command -v uv >/dev/null 2>&1; then
-    echo "[ERR] uv still not reachable in this shell. Open a new terminal and re-run this script."
+    echo "[ERR] uv installed but is not on PATH in this shell."
+    echo ""
+    echo "Add uv to PATH, then reopen your terminal:"
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+    echo "To persist on Linux/macOS, add to your shell profile (e.g. ~/.bashrc, ~/.zshrc):"
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
     exit 1
   fi
   echo "[OK] uv installed and reachable."
@@ -53,5 +66,9 @@ echo ""
 echo "Installation completed successfully!"
 echo "Try:"
 echo "  uv run archiverse --help"
+echo ""
+echo "If 'uv: command not found' appears in another terminal, add:"
+echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+echo "to your shell profile (e.g. ~/.bashrc or ~/.zshrc), then restart the shell."
 echo ""
 
