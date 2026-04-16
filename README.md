@@ -40,12 +40,20 @@ cd archiverse
 Then run the installer for your OS:
 
 - **Windows:** `install.bat`
-- **macOS / Linux:** `./install.sh`
+- **macOS / Linux:** `chmod +x install.sh` then `./install.sh`
 
 What the installer does:
 - Installs `uv` if needed
 - Runs `uv sync` to install Python dependencies
 - Creates `config.yaml` from `config.yaml.template` if missing
+
+### Using `uv` (recommended)
+
+After running the installer, you can run without manual venv management:
+
+```bash
+uv run archiverse --help
+```
 
 ### 2) Manual install (fallback)
 
@@ -68,15 +76,13 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-### Using `uv` (recommended)
-
-If you have [`uv`](https://github.com/astral-sh/uv) installed, you can run without manual venv management:
+Then run:
 
 ```bash
-uv run archiverse --help
+python -m archiverse --help
 ```
 
-Create your config from the template:
+For manual installation, create your config from the template:
 
 | OS | Command |
 |----|---------|
