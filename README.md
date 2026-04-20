@@ -12,10 +12,11 @@ This project is based on [Weverse Archive](https://github.com/honeyedoasis/Wever
 
 - **Python 3.10+** (Streamlink requires Python 3.10+; uses `zoneinfo` in the standard library)
 - **PyPI dependencies** — see [`requirements.txt`](requirements.txt)
-- **External programs** (install separately and/or set full paths in `config.yaml`):
+- **External programs** (install separately and/or set full paths in `config.yaml`. Highly recommended to add them to PATH as well):
   - [FFmpeg](https://ffmpeg.org/) (and **ffprobe**, usually in the same install — used for mux/remux progress)
   - [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE) (DRM and HLS)
-  - [mkvpropedit](https://mkvtoolnix.download/) (MKV metadata, when used)
+  - [mkvpropedit](https://mkvtoolnix.downloadfasdf/) (MKV metadata, when used)
+  - [shaka-packager](https://github.com/shaka-project/shaka-packager/releases/tag/v2.6.1) (rename to `shaka-packager`) (DRM decryption)
 
 You also need:
 
