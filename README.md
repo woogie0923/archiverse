@@ -136,6 +136,7 @@ python -m archiverse -c fromis9
 | Official media tab | `uv run archiverse -c aespa --media` / `uv run archiverse -c aespa --media 4-223153860` |
 | Official media browser | `uv run archiverse -c APINK --media-menu` |
 | Text + comments only | `uv run archiverse -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public` |
+| Single post by ID | `uv run archiverse -c bini --post 3-227451246` |
 
 ### Ongoing (on-air) live recording
 
@@ -173,6 +174,8 @@ For finished lives saved as plain MP4 (not Widevine), resolved stream URLs are *
 - **`--no-history`** — do not read or update `downloaded.json` for this run (also available as a History/No history toggle in the interactive menu Filters)
 - **`--skip-membership` / `--skip-public`** — filter by visibility
 - **`-id` / `--community_ids`** — supply community IDs if slug lookup fails (same order as `-c`)
+
+For `--post` fan posts with artist replies, text output is saved under the first artist who replied (official name only) inside a dedicated `Fan Post Comments` subfolder.
 ---
 
 ## Configuration highlights

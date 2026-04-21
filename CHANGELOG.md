@@ -4,6 +4,18 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-04-22 (v0.1.3)
+
+### Added
+
+- **`--post` fan comment organization** — when archiving a fan post with artist replies, text output is now placed under the first artist who replied, inside a dedicated `Fan Post Comments` subfolder.
+
+### Changed
+
+- **Artist folder naming for fan-post replies** — folder names now use the artist's official name only (for example `Colet Vergara`), without appending usernames like `(coletskiii)`.
+
+---
+
 ## 2026-04-15 (v0.1.2)
 
 ### Added
@@ -16,7 +28,7 @@ All notable changes to this project are recorded here. The history below follows
 ### Changed
 
 - **Auth status propagation** — token usage/refresh messages are now persisted in shared runtime state so the interactive menu can render them consistently.
-- **N_m3u8DL-RE progress UI** — replace raw N_m3u8DL-RE output with a clean progress bar during downloads
+- **N_m3u8DL-RE progress UI** — replace raw N_m3u8DL-RE output with a clean progress bar during downloads.
 
 ---
 

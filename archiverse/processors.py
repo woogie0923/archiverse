@@ -13,7 +13,7 @@ from .utils import console
 from . import state
 from .config import DOWNLOAD_SLEEP, STOP_THRESHOLD, get_folder
 from .text_writer import (
-    save_post_text, embed_url_metadata,
+    save_post_text, embed_url_metadata, fetch_comments,
     artist_post_url, moment_url, official_post_url,
 )
 from .api import make_extractor, run_extr, fetch_post_details, register_member_name
@@ -84,7 +84,19 @@ def process_single_post(post_id: str):
     elif post_type in ("MOMENT_W1", "MOMENT"):
         process_moments(direct_id=post_id)
     else:
-        clean_name = sanitise(author_name)
+        # For fan posts with artist replies, store under the artist who replied first.
+        # If multiple artists replied, first (oldest) artist comment wins.
+        # Use the artist's official display name for folder naming (no username suffix).
+        folder_artist_name = author_name
+        try:
+            artist_comments, _ = fetch_comments(post_id)
+            if artist_comments:
+                first_artist = str(artist_comments[0].get("authorName") or "").strip()
+                folder_artist_name = first_artist.split(" (", 1)[0].strip() or author_name
+        except Exception:
+            folder_artist_name = author_name
+
+        clean_name = sanitise(folder_artist_name)
         register_member_name(member_id, author_name)
         date        = utils.timestamp(full_post["publishedAt"])
         is_mem      = full_post.get("membershipOnly", False)
@@ -94,12 +106,22 @@ def process_single_post(post_id: str):
         videos      = attachments.get("video", {})
         _post_url   = artist_post_url(state.COMMUNITY_NAME, post_id)
         artist_dir  = get_folder("artist_posts", community=state.COMMUNITY_NAME, tier=tier, artist=clean_name)
+        # Keep fan-post comment archives separate from normal artist-feed downloads.
+        if str(author.get("profileType") or "").upper() == "FAN":
+            artist_dir = f"{artist_dir}/Fan Post Comments"
         os.makedirs(artist_dir, exist_ok=True)
 
         if not photos and not videos:
             if state.SAVE_TEXT:
                 txt_stem = make_filename(clean_name, date, post_id, title="", template_key="artist_posts", tier=tier)
-                save_post_text(full_post, artist_dir, txt_stem, weverse_url=_post_url, fetch_artist_comments=True)
+                save_post_text(
+                    full_post,
+                    artist_dir,
+                    txt_stem,
+                    weverse_url=_post_url,
+                    fetch_artist_comments=True,
+                    force_comments=True,
+                )
                 txt_path = Path(artist_dir) / f"{txt_stem}.txt"
                 if txt_path.exists():
                     mark_downloaded(post_id)
@@ -135,7 +157,14 @@ def process_single_post(post_id: str):
 
         if state.SAVE_TEXT:
             txt_stem = make_filename(clean_name, date, post_id, title="", template_key="artist_posts", tier=tier)
-            save_post_text(full_post, artist_dir, txt_stem, weverse_url=_post_url, fetch_artist_comments=True)
+            save_post_text(
+                full_post,
+                artist_dir,
+                txt_stem,
+                weverse_url=_post_url,
+                fetch_artist_comments=True,
+                force_comments=True,
+            )
             txt_path = Path(artist_dir) / f"{txt_stem}.txt"
             if txt_path.exists():
                 found_any = True
@@ -186,7 +215,14 @@ def _process_single_official_post(full_post: dict):
     if state.SAVE_TEXT:
         _off_dir  = get_folder("official_channel", community=state.COMMUNITY_NAME, channel=channel_name)
         _off_stem = make_filename(channel_name, date, post_id, title="", template_key="official_posts", tier="Public")
-        save_post_text(full_post, _off_dir, _off_stem, weverse_url=_off_url, fetch_artist_comments=False)
+        save_post_text(
+            full_post,
+            _off_dir,
+            _off_stem,
+            weverse_url=_off_url,
+            fetch_artist_comments=True,
+            force_comments=True,
+        )
 
         txt_path = Path(_off_dir) / f"{_off_stem}.txt"
         if txt_path.exists():
