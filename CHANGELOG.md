@@ -12,7 +12,7 @@ All notable changes to this project are recorded here. The history below follows
 
 ### Changed
 
-- **Artist folder naming for fan-post replies** — folder names now use the artist's official name only (for example `Colet Vergara`), without appending usernames like `(coletskiii)`.
+- **Artist folder naming for fan-post replies** — folder names still uses the artist's name.
 
 ---
 

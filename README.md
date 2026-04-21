@@ -175,7 +175,7 @@ For finished lives saved as plain MP4 (not Widevine), resolved stream URLs are *
 - **`--skip-membership` / `--skip-public`** — filter by visibility
 - **`-id` / `--community_ids`** — supply community IDs if slug lookup fails (same order as `-c`)
 
-For `--post` fan posts with artist replies, text output is saved under the first artist who replied (official name only) inside a dedicated `Fan Post Comments` subfolder.
+For `--post` fan posts with artist replies, text output is saved under the first artist who replied inside a dedicated `Fan Post Comments` subfolder.
 ---
 
 ## Configuration highlights
