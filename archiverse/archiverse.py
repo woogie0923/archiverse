@@ -105,6 +105,12 @@ def main():
         action="store_true",
         help="When downloading subtitles for ongoing lives, mux/embed them into the recorded video container after download.",
     )
+    g_action.add_argument(
+        "--ongoing-live-overwrite",
+        action="store_true",
+        help="Re-download an on-air live even if it is already in the cache, on disk, or currently being recorded "
+             "(still recording skips until the active download finishes).",
+    )
     g_action.add_argument("--moments", nargs="?", const=True, metavar="POST_ID",
                           help="Archive Artist Moments. Provide a Post ID for a specific moment.")
     g_action.add_argument("--post", metavar="POST_ID",

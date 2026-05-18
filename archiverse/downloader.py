@@ -831,7 +831,7 @@ def record_ongoing_live_streamlink(
             "--http-header",
             "Referer=https://weverse.io/",
             "--stream-timeout",
-            "120",
+            "240",
             "-o",
             str(temp_path),
             "--hls-live-restart",

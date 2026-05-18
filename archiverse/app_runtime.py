@@ -70,6 +70,7 @@ def ongoing_live_kwargs_from_args(args, direct_match=None, skip_prompt=False) ->
         "output_format": args.ongoing_live_output_format,
         "download_only": args.ongoing_live_download_only,
         "mux_subs": args.ongoing_live_mux_subs,
+        "force_overwrite": args.ongoing_live_overwrite,
         "skip_monitor_prompt": skip_prompt,
     }
 
@@ -223,6 +224,7 @@ class AppRuntime:
             output_format=sel.get("output_format", self.args.ongoing_live_output_format),
             download_only=sel.get("download_only", "both"),
             mux_subs=sel.get("mux_subs", False),
+            force_overwrite=sel.get("force_overwrite", self.args.ongoing_live_overwrite),
             skip_monitor_prompt=self.args.ongoing_live_monitor_no_prompt,
         )
 

@@ -4,6 +4,15 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-05-18 (v0.1.4)
+
+### Added
+
+- **Ongoing live overwrite** — `--ongoing-live-overwrite` skips cache/disk checks and re-records an on-air live (useful after a failed or partial download).
+- **Ongoing live overwrite prompt** — when a live is already in the download cache, on disk, or actively recording, the app asks whether to overwrite before starting again (interactive menu: **Overwrite existing** toggles silent overwrite).
+
+---
+
 ## 2026-04-22 (v0.1.3)
 
 ### Added

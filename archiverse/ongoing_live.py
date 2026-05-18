@@ -24,6 +24,74 @@ from .downloader import (
 from .helpers import get_author_name, make_filename, sanitise, mux_subtitles_into_video
 from .utils import console, edit_creation_date
 
+_ONGOING_ACTIVE_LOCK = threading.Lock()
+_ONGOING_ACTIVE_POST_IDS: set[str] = set()
+
+_ONGOING_CONFLICT_MESSAGES = {
+    "recording": "This live is already being downloaded.",
+    "cache": "This live is already in the cache.",
+    "files": "This live already has saved files on disk.",
+}
+
+
+def register_ongoing_active(post_id: str) -> bool:
+    """Return True if this post_id was newly registered as active."""
+    with _ONGOING_ACTIVE_LOCK:
+        if post_id in _ONGOING_ACTIVE_POST_IDS:
+            return False
+        _ONGOING_ACTIVE_POST_IDS.add(post_id)
+        return True
+
+
+def unregister_ongoing_active(post_id: str) -> None:
+    with _ONGOING_ACTIVE_LOCK:
+        _ONGOING_ACTIVE_POST_IDS.discard(post_id)
+
+
+def is_ongoing_active(post_id: str) -> bool:
+    with _ONGOING_ACTIVE_LOCK:
+        return post_id in _ONGOING_ACTIVE_POST_IDS
+
+
+def detect_ongoing_live_conflict(file_info: dict) -> str | None:
+    """
+    Return a conflict reason when re-recording should be confirmed:
+      - recording: another thread is recording this post_id
+      - cache: post_id is in download history
+      - files: output folder already has files for this live
+    """
+    post_id = (file_info.get("post_id") or "").strip()
+    if not post_id:
+        return None
+    if is_ongoing_active(post_id):
+        return "recording"
+    try:
+        out_dir, stem = _compute_output(file_info)
+        if is_already_downloaded(str(out_dir / stem), post_id):
+            return "cache"
+        for ext in (".mp4", ".mkv", ".vtt", ".srt", ".ts"):
+            if any(out_dir.glob(f"{stem}*{ext}")):
+                return "files"
+    except Exception:
+        pass
+    return None
+
+
+def prompt_overwrite_ongoing_live(file_info: dict, *, force_overwrite: bool) -> bool:
+    """Return True if the user wants to record (or re-record) this live."""
+    if force_overwrite:
+        return True
+    reason = detect_ongoing_live_conflict(file_info)
+    if not reason:
+        return True
+    title = (file_info.get("title") or file_info.get("post_id") or "live").strip()
+    if len(title) > 72:
+        title = title[:69] + "..."
+    console.print(f"\n  [Ongoing Live] {_ONGOING_CONFLICT_MESSAGES.get(reason, 'This live was already archived.')}")
+    console.print(f"  Post: {file_info.get('post_id')} — {title}")
+    ans = console.input("  Do you want to overwrite it? [y/N]: ").strip().lower()
+    return ans in ("y", "yes")
+
 
 def select_ongoing_live_options() -> dict | str | None:
     """
@@ -46,6 +114,7 @@ def select_ongoing_live_options() -> dict | str | None:
     subtitle_langs = "eng|kor"  # eng|kor|eng|kor|none
     output_format = "mp4"
     record_all = False
+    force_overwrite = False
 
     download_opts = ["both", "video", "subs"]
     poll_opts = [10, 30, 60]
@@ -59,6 +128,7 @@ def select_ongoing_live_options() -> dict | str | None:
         ("Output format", "output_format"),
         ("Mux subs into video", "mux_subs"),
         ("Record all on-air lives", "record_all"),
+        ("Overwrite existing", "force_overwrite"),
     ]
 
     cursor = 0
@@ -91,6 +161,8 @@ def select_ongoing_live_options() -> dict | str | None:
                 val = "yes" if mux_subs else "no"
             elif key == "record_all":
                 val = "yes" if record_all else "no"
+            elif key == "force_overwrite":
+                val = "yes" if force_overwrite else "no"
             else:
                 val = "?"
 
@@ -126,6 +198,8 @@ def select_ongoing_live_options() -> dict | str | None:
                 mux_subs = not mux_subs
             elif key == "record_all":
                 record_all = not record_all
+            elif key == "force_overwrite":
+                force_overwrite = not force_overwrite
         elif k in ("s", "enter"):
             return {
                 "download_only": download_only,
@@ -134,6 +208,7 @@ def select_ongoing_live_options() -> dict | str | None:
                 "subtitle_langs": subtitle_langs,
                 "output_format": output_format,
                 "record_all": record_all,
+                "force_overwrite": force_overwrite,
             }
         elif k in ("b", "back"):
             return "back"
@@ -278,10 +353,8 @@ def _record_one(file_info: dict, poll_conf: dict):
       - Streamlink for video (.mp4 or .mkv from --ongoing-live-output-format)
       - Optional N_m3u8DL-RE for subtitles
     """
-    from .text_writer import embed_url_metadata, live_url
-
     post_id = file_info["post_id"]
-    video_id = file_info["video_id"]
+    force_overwrite = bool(poll_conf.get("force_overwrite"))
 
     # Tier gating (membership/public).
     if file_info.get("is_membership") and state.SKIP_MEMBERSHIP:
@@ -291,10 +364,30 @@ def _record_one(file_info: dict, poll_conf: dict):
         console.print(f"  [Skip] Public live {post_id}")
         return
 
+    if not register_ongoing_active(post_id):
+        if force_overwrite:
+            console.print(
+                f"  [Ongoing Live] {post_id} is still being recorded; "
+                "wait for it to finish before overwriting."
+            )
+        return
+
+    try:
+        _record_one_body(file_info, poll_conf, force_overwrite=force_overwrite)
+    finally:
+        unregister_ongoing_active(post_id)
+
+
+def _record_one_body(file_info: dict, poll_conf: dict, *, force_overwrite: bool):
+    from .text_writer import embed_url_metadata, live_url
+
+    post_id = file_info["post_id"]
+    video_id = file_info["video_id"]
+
     out_dir, stem = _compute_output(file_info)
 
-    # Deduping using existing download history.
-    if is_already_downloaded(str(out_dir / stem), post_id):
+    # Deduping using existing download history (skip when overwriting).
+    if not force_overwrite and is_already_downloaded(str(out_dir / stem), post_id):
         return
 
     hls_url, _ = get_live_hls_url(video_id)
@@ -438,12 +531,14 @@ def process_ongoing_lives(
     download_only: str = "both",
     mux_subs: bool = False,
     *,
+    force_overwrite: bool = False,
     skip_monitor_prompt: bool = False,
 ):
     """
     Monitor ongoing lives and record them until the user stops the program.
     """
     active: set[str] = set()
+    declined: set[str] = set()
     lock = threading.Lock()
 
     # For ongoing lives: no chat saving (explicit requirement).
@@ -453,6 +548,7 @@ def process_ongoing_lives(
         "output_format": output_format,
         "download_only": download_only,
         "mux_subs": mux_subs,
+        "force_overwrite": force_overwrite,
         "subs_live_take_count": 500,
         "subs_live_wait_time": 4,
     }
@@ -470,6 +566,9 @@ def process_ongoing_lives(
                 continue
             post_id = info.get("post_id") or ""
             if not post_id:
+                continue
+            if not prompt_overwrite_ongoing_live(info, force_overwrite=force_overwrite):
+                console.print(f"  [Ongoing Live] Skipped {post_id} (not overwriting).")
                 continue
             _record_one(info, poll_conf)
 
@@ -499,13 +598,24 @@ def process_ongoing_lives(
                     continue
                 active.add(post_id)
 
-            def _runner():
+            if not force_overwrite and post_id in declined:
+                with lock:
+                    active.discard(post_id)
+                continue
+
+            if not prompt_overwrite_ongoing_live(info, force_overwrite=force_overwrite):
+                declined.add(post_id)
+                with lock:
+                    active.discard(post_id)
+                continue
+
+            def _runner(pi=post_id, fi=info):
                 try:
-                    _record_one(info, poll_conf)
+                    _record_one(fi, poll_conf)
                 finally:
                     with lock:
-                        active.discard(post_id)
-                    ended.append(post_id)
+                        active.discard(pi)
+                    ended.append(pi)
 
             threading.Thread(target=_runner, daemon=True).start()
 
