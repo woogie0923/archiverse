@@ -24,6 +24,22 @@ from .downloader import (
     is_already_downloaded, download_cvideo,
     get_official_video_url, mark_downloaded
 )
+from .download_cache import is_post_in_history
+
+
+def _count_cached_post_toward_stop(consecutive_no_new: int, post_id: str) -> tuple[int, bool]:
+    """
+    Record one cached post toward stop_threshold.
+    Returns (updated counter, True when the threshold is reached).
+    """
+    is_post_in_history(post_id, announce=True)
+    consecutive_no_new += 1
+    if consecutive_no_new >= STOP_THRESHOLD:
+        console.print(
+            f"  [Stop] Reached {STOP_THRESHOLD} consecutive cached posts — moving on."
+        )
+        return consecutive_no_new, True
+    return consecutive_no_new, False
 from .official_media import process_official_media
 from .official_media_menu import process_official_media_menu
 
@@ -366,6 +382,10 @@ def process_moments(direct_id=None):
                 path     = f"{moment_dir}/{filename}"
 
                 if is_already_downloaded(path, post_id=m["postId"]):
+                    if new_this_session:
+                        consecutive_no_new += 1
+                        if consecutive_no_new >= STOP_THRESHOLD:
+                            break
                     continue
 
                 ext_block     = m.get("extension", {})
@@ -400,13 +420,14 @@ def process_moments(direct_id=None):
                             found_content = True
 
                 if state.SAVE_TEXT:
+                    txt_path = Path(moment_dir) / f"{os.path.basename(path)}.txt"
+                    had_txt = txt_path.exists()
                     save_post_text(m, moment_dir,
                                    os.path.basename(path),
                                    weverse_url=_moment_url,
                                    fetch_artist_comments=True,
                                    force_comments=True)
-                    txt_path = Path(moment_dir) / f"{os.path.basename(path)}.txt"
-                    if txt_path.exists():
+                    if txt_path.exists() and not had_txt:
                         found_content = True
 
                 if found_content:
@@ -461,6 +482,17 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
 
         for summary in items:
             post_id   = summary.get("postId")
+            if not post_id:
+                continue
+
+            if is_post_in_history(str(post_id)):
+                consecutive_no_new, should_stop = _count_cached_post_toward_stop(
+                    consecutive_no_new, str(post_id)
+                )
+                if should_stop:
+                    break
+                continue
+
             full_post = fetch_post_details(summary)
             if not full_post:
                 continue
@@ -492,12 +524,23 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
             if not photos and not videos:
                 if state.SAVE_TEXT:
                     txt_stem = make_filename(clean_member_name, date, post_id, title="", template_key="artist_posts", tier=tier)
+                    txt_path = Path(artist_dir) / f"{txt_stem}.txt"
+                    had_txt = txt_path.exists() or is_post_in_history(str(post_id), announce=False)
                     save_post_text(full_post, artist_dir, txt_stem,
                                    weverse_url=_post_url,
                                    fetch_artist_comments=True)
-                    txt_path = Path(artist_dir) / f"{txt_stem}.txt"
-                    if txt_path.exists():
+                    if txt_path.exists() and not had_txt:
                         mark_downloaded(post_id)
+                        consecutive_no_new = 0
+                    else:
+                        consecutive_no_new += 1
+                else:
+                    consecutive_no_new += 1
+                if consecutive_no_new >= STOP_THRESHOLD:
+                    console.print(
+                        f"  [Stop] Reached {STOP_THRESHOLD} consecutive cached posts — moving on."
+                    )
+                    break
                 continue
 
             found_new = False
@@ -534,10 +577,12 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
 
             if state.SAVE_TEXT:
                 txt_stem = make_filename(clean_member_name, date, post_id, title="", template_key="artist_posts", tier=tier)
+                txt_path = Path(artist_dir) / f"{txt_stem}.txt"
+                had_txt = txt_path.exists()
                 save_post_text(full_post, artist_dir, txt_stem,
                                weverse_url=_post_url,
                                fetch_artist_comments=True)
-                if (Path(artist_dir) / f"{txt_stem}.txt").exists():
+                if txt_path.exists() and not had_txt:
                     found_new = True
 
             if found_new:
@@ -547,6 +592,9 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
                 consecutive_no_new += 1
 
             if consecutive_no_new >= STOP_THRESHOLD:
+                console.print(
+                    f"  [Stop] Reached {STOP_THRESHOLD} consecutive cached posts — moving on."
+                )
                 break
 
         if consecutive_no_new >= STOP_THRESHOLD:
@@ -617,6 +665,15 @@ def process_official_posts(member_ids: list):
                     channel_name = sanitise(raw_name)
                     console.print(f"  -> Resolved channel name: {channel_name}")
 
+                post_id = summary.get("postId")
+                if post_id and is_post_in_history(str(post_id)):
+                    consecutive_no_new, should_stop = _count_cached_post_toward_stop(
+                        consecutive_no_new, str(post_id)
+                    )
+                    if should_stop:
+                        break
+                    continue
+
                 full_post = fetch_post_details(summary)
                 if not full_post:
                     continue
@@ -632,10 +689,11 @@ def process_official_posts(member_ids: list):
                     if state.SAVE_TEXT and channel_name:
                         _off_dir  = get_folder("official_channel", community=state.COMMUNITY_NAME, channel=channel_name)
                         _off_stem = make_filename(channel_name, date, summary["postId"], title="", template_key="official_posts", tier="Public")
+                        txt_path = Path(_off_dir) / f"{_off_stem}.txt"
+                        had_txt = txt_path.exists()
                         save_post_text(full_post, _off_dir, _off_stem,
                                        weverse_url=_off_url, fetch_artist_comments=False)
-                        txt_path = Path(_off_dir) / f"{_off_stem}.txt"
-                        if txt_path.exists():
+                        if txt_path.exists() and not had_txt:
                             mark_downloaded(summary["postId"])
                             consecutive_no_new = 0
                         else:
@@ -696,11 +754,12 @@ def process_official_posts(member_ids: list):
                 if state.SAVE_TEXT and channel_name:
                     _off_dir  = get_folder("official_channel", community=state.COMMUNITY_NAME, channel=channel_name)
                     _off_stem = make_filename(channel_name, date, summary["postId"], title="", template_key="official_posts", tier="Public")
+                    txt_path = Path(_off_dir) / f"{_off_stem}.txt"
+                    had_txt = txt_path.exists()
                     save_post_text(full_post, _off_dir, _off_stem,
                                    weverse_url=_off_url,
                                    fetch_artist_comments=False)
-                    txt_path = Path(_off_dir) / f"{_off_stem}.txt"
-                    if txt_path.exists():
+                    if txt_path.exists() and not had_txt:
                         found_new = True
                 if found_new:
                     consecutive_no_new = 0
@@ -709,6 +768,9 @@ def process_official_posts(member_ids: list):
                     consecutive_no_new += 1
 
                 if consecutive_no_new >= STOP_THRESHOLD:
+                    console.print(
+                        f"  [Stop] Reached {STOP_THRESHOLD} consecutive cached posts — moving on."
+                    )
                     break
 
             current_cursor = resp.get("paging", {}).get("nextParams", {}).get("after")

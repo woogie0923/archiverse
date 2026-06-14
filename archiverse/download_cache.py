@@ -94,6 +94,21 @@ def mark_downloaded(post_id: str) -> None:
     _save_dl_history(history)
 
 
+def is_post_in_history(post_id: str, *, announce: bool = True) -> bool:
+    """Return True if post_id is recorded in the download history cache."""
+    if not post_id or not state.DOWNLOAD_HISTORY_ENABLED:
+        return False
+    pid = str(post_id).strip()
+    if not pid:
+        return False
+    if pid in _load_dl_history():
+        if announce and pid not in _printed_history_ids:
+            _printed_history_ids.add(pid)
+            console.print(f"  [History] Post {pid} already in download history — skipping.")
+        return True
+    return False
+
+
 def is_already_downloaded(base_path: str, post_id: str = "") -> bool:
     """
     Returns True if the content has already been downloaded.
@@ -102,13 +117,8 @@ def is_already_downloaded(base_path: str, post_id: str = "") -> bool:
     1. Download history cache (post_id) — works even if files were moved.
     2. Filesystem scan for base_path + '.*' — original extension-agnostic check.
     """
-    if post_id:
-        history = _load_dl_history()
-        if str(post_id) in history:
-            if post_id not in _printed_history_ids:
-                _printed_history_ids.add(post_id)
-                console.print(f"  [History] Post {post_id} already in download history — skipping.")
-            return True
+    if post_id and is_post_in_history(post_id, announce=True):
+        return True
     path_obj = Path(base_path)
     if path_obj.parent.exists():
         for file in path_obj.parent.iterdir():

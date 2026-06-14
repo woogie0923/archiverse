@@ -4,6 +4,19 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-06-14 (v0.1.5)
+
+### Fixed
+
+- **`stop_threshold` not stopping artist post scans** — cached posts no longer reset the counter when text export is enabled (existing `.txt` files were incorrectly treated as new content). After new posts are downloaded, scanning stops once the configured number of consecutive cached posts is reached and the app moves on to the next artist.
+- **Early history skip** — posts already in the download history cache are detected from the listing before fetching full post details, reducing unnecessary API calls during incremental runs.
+
+### Changed
+
+- **`stop_threshold` config comment** — template default lowered to `20` with clearer wording: consecutive cached posts to scan before moving to the next artist/channel.
+
+---
+
 ## 2026-05-18 (v0.1.4)
 
 ### Added

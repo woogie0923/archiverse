@@ -39,7 +39,7 @@ binaries:
 
 timezone: "Asia/Seoul"
 
-stop_threshold: 200
+stop_threshold: 20     # consecutive cached posts to scan before moving to the next artist/channel
 paged_sleep: 2
 short_sleep: 0.5
 download_sleep: 3.0
