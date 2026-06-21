@@ -118,7 +118,16 @@ def process_official_media_menu():
             pass
 
     if state.SKIP_PUBLIC:
-        cats = [c for c in cats if c.get("_is_membership")]
+        cats = [c for c in cats if c.get("_is_membership") or c.get("_is_all_media")]
+
+    cats.insert(0, {
+        "id":            "__ALL__",
+        "title":         "All",
+        "count":         0,
+        "videoCount":    0,
+        "photoCount":    0,
+        "_is_all_media": True,
+    })
 
     cat_cursor = 0
     while True:
@@ -179,7 +188,14 @@ def process_official_media_menu():
         cat_api_cursor    = None
 
         def _fetch_cat_page(cat, after=None):
-            if cat.get("_is_membership"):
+            if cat.get("_is_all_media"):
+                url = (
+                    f"/media/v1.0/community-{state.COMMUNITY_ID}/searchAllMedia"
+                    f"?fieldSet=postsV1&communityId={state.COMMUNITY_ID}&sortOrder=DESC"
+                )
+                if after:
+                    url += f"&after={after.replace(',', '%2C')}"
+            elif cat.get("_is_membership"):
                 url = (
                     f"/media/v1.0/community-{state.COMMUNITY_ID}/more"
                     f"?appId=be4d79eb8fc7bd008ee82c8ec4ff6fd4&fieldSet=postsV1"

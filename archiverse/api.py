@@ -89,7 +89,7 @@ def _resolve_cache_path(req: str) -> Path | None:
         return root / "profiles.json"
 
     # Official media (paginated listing + individual details)
-    if "/media/v1.0/" in req or "/MEDIA_HOME/" in req:
+    if "/media/v1.0/" in req or "/media/v1.1/" in req or "/MEDIA_HOME/" in req:
         return root / "official_media.json"
 
     # Artist community feed (used for former members)
@@ -236,7 +236,7 @@ def _slim_response(req: str, data: dict) -> dict:
             }
         return data
 
-    if "/media/v1.0/" in req or "/MEDIA_HOME/" in req:
+    if "/media/v1.0/" in req or "/media/v1.1/" in req or "/MEDIA_HOME/" in req:
         def _slim_media(p):
             ext = p.get("extension", {})
             slim_ext = {k: ext[k] for k in ("video", "image", "mediaInfo") if k in ext}

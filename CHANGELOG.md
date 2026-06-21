@@ -4,6 +4,14 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-06-21 (v0.1.6)
+
+### Added
+
+- **Media Categories — All** — new **All** entry at the top of the Media Categories menu lists every official media post via `searchAllMedia` (`sortOrder=DESC`, paginated), matching the Media tab feed.
+
+---
+
 ## 2026-06-14 (v0.1.5)
 
 ### Fixed
