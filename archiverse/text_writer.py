@@ -592,11 +592,7 @@ def save_live_chat(post_id: str, output_dir: str, filename_stem: str):
     """
     Download and save the full live stream chat log.
     File: {filename_stem}_chat_all.txt
-    Only runs when state.SAVE_TEXT is True.
     """
-    if not state.SAVE_TEXT:
-        return
-
     chat_path = Path(output_dir) / f"{filename_stem}_chat_all.txt"
     if chat_path.exists():
         return
@@ -639,11 +635,7 @@ def save_live_artist_chat(post_id: str, output_dir: str, filename_stem: str):
     """
     Download and save only the artist messages from a live stream chat.
     File: {filename_stem}_chat_artist.txt
-    Only runs when state.SAVE_TEXT is True.
     """
-    if not state.SAVE_TEXT:
-        return
-
     chat_path = Path(output_dir) / f"{filename_stem}_chat_artist.txt"
     if chat_path.exists():
         return
@@ -678,3 +670,14 @@ def save_live_artist_chat(post_id: str, output_dir: str, filename_stem: str):
     chat_path.parent.mkdir(parents=True, exist_ok=True)
     chat_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     console.print(f"  [Chat] Saved {len(lines)} artist messages: {chat_path.name}")
+
+
+def save_live_chats(post_id: str, output_dir: str, filename_stem: str) -> None:
+    """Save past live VOD chat logs according to state.LIVE_CHAT_MODE."""
+    mode = str(getattr(state, "LIVE_CHAT_MODE", "none") or "none").strip().lower()
+    if mode in ("none", "no", "off", ""):
+        return
+    if mode in ("all", "both"):
+        save_live_chat(post_id, output_dir, filename_stem)
+    elif mode in ("artist", "artists"):
+        save_live_artist_chat(post_id, output_dir, filename_stem)

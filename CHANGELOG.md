@@ -4,6 +4,22 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-06-21 (v0.1.7)
+
+### Added
+
+- **Live VOD chat mode** — `--live-chat {none,all,artist}` controls chat export when downloading past live VODs (`--live` / Lives menu). Interactive menu **Filters → Live chat** offers the same choices (default: none).
+
+### Removed
+
+- **`--ongoing-live-chat`** — removed unused flag; chat is not archived during on-air recording (download chat after the VOD is available).
+
+### Changed
+
+- **Live chat decoupled from text export** — chat logs are no longer tied to `--text`; use `--live-chat` or the menu filter instead.
+
+---
+
 ## 2026-06-21 (v0.1.6)
 
 ### Added

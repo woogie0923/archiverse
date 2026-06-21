@@ -80,8 +80,13 @@ def main():
                           help="Polling interval (seconds) for --ongoing-live-monitor. Default: 30.")
     g_action.add_argument("--ongoing-live-record-all", action="store_true",
                           help="When multiple lives are on-air, record all instead of only the newest.")
-    g_action.add_argument("--ongoing-live-chat", action="store_true",
-                          help="(Ignored for ongoing lives) Ongoing live chat is not downloaded.")
+    g_action.add_argument(
+        "--live-chat",
+        choices=["none", "all", "artist"],
+        default="none",
+        help="When downloading past live VODs (--live): save chat logs as .txt — "
+             "none (default), all (full chat), or artist (artist messages only).",
+    )
     g_action.add_argument("--ongoing-live-subs", type=str, default="eng|kor", metavar="LANGS",
                           help='Post-recording subs via N_m3u8DL-RE: -ss lang="LANGS":for=all. '
                                'Use none (or no/off) to skip subtitles. Default: eng|kor.')

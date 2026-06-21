@@ -141,12 +141,19 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         ("No history",  {"DOWNLOAD_HISTORY_ENABLED": False}),
     ]
 
-    filter_idx = [0, 0, 0, 0]
+    LIVE_CHAT_OPTS = [
+        ("None",              {"LIVE_CHAT_MODE": "none"}),
+        ("All chat",          {"LIVE_CHAT_MODE": "all"}),
+        ("Artist chat only",  {"LIVE_CHAT_MODE": "artist"}),
+    ]
+
+    filter_idx = [0, 0, 0, 0, 0]
     FILTERS    = [
         ("Media type", MEDIA_OPTS),
         ("Tier",       TIER_OPTS),
         ("Text",       TEXT_OPTS),
         ("History",    HISTORY_OPTS),
+        ("Live chat",  LIVE_CHAT_OPTS),
     ]
 
     # Archive tab: feed-style items. Actions tab: tooling (separate Tab/→ section).
@@ -212,9 +219,12 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
 
     _saved = _load_menu_state()
     if _saved:
-        _fi = _saved.get("filter_idx", [0, 0, 0, 0])
+        _fi = _saved.get("filter_idx", [0, 0, 0, 0, 0])
         if len(_fi) == len(filter_idx):
             filter_idx[:] = _fi
+        elif len(_fi) == 4 and len(filter_idx) == 5:
+            filter_idx[:4] = _fi
+            filter_idx[4] = 0
 
     SECTION_FILTERS  = 0
     SECTION_ARTISTS  = 1
@@ -639,7 +649,8 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
             return s[: max_w - 1] + "…"
 
         row1 = _clip_line(
-            f"  Media   : {media_s}{gap}Tier    : {tier_s}{gap}Text    : {text_s}",
+            f"  Media   : {media_s}{gap}Tier    : {tier_s}{gap}Text    : {text_s}{gap}"
+            f"Chat    : {escape(FILTERS[4][1][filter_idx[4]][0])}",
             tw,
         )
         row2 = _clip_line(

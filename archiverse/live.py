@@ -344,10 +344,8 @@ def download_single_live(item_data: dict, post_id: str | None = None):
         if drm_ok:
             mark_downloaded(post_id)
 
-        if state.SAVE_TEXT:
-            from .text_writer import save_live_chat, save_live_artist_chat
-            save_live_chat(post_id, str(lives_dir), safe_filename)
-            save_live_artist_chat(post_id, str(lives_dir), safe_filename)
+        from .text_writer import save_live_chats
+        save_live_chats(post_id, str(lives_dir), safe_filename)
         return
 
     final_path = lives_dir / f"{safe_filename}.mkv"
@@ -503,10 +501,8 @@ def download_single_live(item_data: dict, post_id: str | None = None):
                 utils.edit_creation_date(str(final_path), _live_date)
             except Exception:
                 pass
-            if state.SAVE_TEXT:
-                from .text_writer import save_live_chat, save_live_artist_chat
-                save_live_chat(post_id, str(lives_dir), safe_filename)
-                save_live_artist_chat(post_id, str(lives_dir), safe_filename)
+            from .text_writer import save_live_chats
+            save_live_chats(post_id, str(lives_dir), safe_filename)
             if final_path.exists():
                 mark_downloaded(post_id)
         else:

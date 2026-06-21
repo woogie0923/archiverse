@@ -131,6 +131,7 @@ python -m archiverse -c fromis9
 | All artists: profiles | `uv run archiverse -c STAYC -a all --profile` |
 | Selected artists: moments | `uv run archiverse -c RedVelvet -a IRENE SEULGI --moments` |
 | Live menu or direct live ID | `uv run archiverse -c Apink --live` / `uv run archiverse -c fromis9 --live 4-12345678` |
+| Live VOD chat logs | `--live-chat all` or `--live-chat artist` with `--live` (default: none) |
 | Artist posts, photos only | `uv run archiverse -c fromis9 -a "SONG HA YOUNG" --artist --type photo` |
 | Official channel by member ID | `uv run archiverse -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673` |
 | Official media tab | `uv run archiverse -c aespa --media` / `uv run archiverse -c aespa --media 4-223153860` |
@@ -158,7 +159,7 @@ python -m archiverse -c fromis9 --ongoing-live-now
 python -m archiverse -c fromis9 --ongoing-live-now "4-1234567890"
 ```
 
-Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-download-only {both,video,subs}`, `--ongoing-live-mux-subs` (embed downloaded subtitles into the recorded video container), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking). The `--ongoing-live-chat` flag is reserved for future use (ongoing chat is not archived yet).
+Useful flags: `--ongoing-live-poll SECONDS`, `--ongoing-live-record-all`, `--ongoing-live-subs`, `--ongoing-live-output-format mp4|mkv` (flag alone keeps default **mp4**), `--ongoing-live-download-only {both,video,subs}`, `--ongoing-live-mux-subs` (embed downloaded subtitles into the recorded video container), `--ongoing-live-monitor-no-prompt` (with `--ongoing-live-monitor` only: after a live ends, keep polling without asking). Chat logs are not saved during ongoing recording; use `--live-chat {none,all,artist}` when downloading past live VODs.
 In interactive mode, these same ongoing-live options can be configured under the **Actions** block.
 
 For long runs, consider setting **`weverse_refresh_token`** in `config.yaml` so access tokens can be refreshed (see `weverse_auth.py`). The app shows refresh-token status at startup and in the interactive main menu.

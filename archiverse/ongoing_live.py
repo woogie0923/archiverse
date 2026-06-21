@@ -541,7 +541,7 @@ def process_ongoing_lives(
     declined: set[str] = set()
     lock = threading.Lock()
 
-    # For ongoing lives: no chat saving (explicit requirement).
+    # For ongoing lives: chat is archived from past live VODs only (--live / Lives menu).
     poll_conf = {
         "live_wait_time": live_wait_time,
         "subtitle_langs": subtitle_langs,

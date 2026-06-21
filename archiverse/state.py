@@ -17,6 +17,7 @@ SKIP_PUBLIC:     bool         = False
 SAVE_TEXT:       bool         = False  # save text-only posts as .txt files
 SAVE_COMMENTS:   bool         = False  # fetch and save artist comments
 TEXT_ONLY:       bool         = False  # skip all media; only save .txt files
+LIVE_CHAT_MODE:  str          = "none"  # past live VOD chat: "none" | "all" | "artist"
 
 # Most recent auth status lines (shown in the interactive main menu).
 # Filled by weverse_auth.get_access_token().

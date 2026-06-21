@@ -108,6 +108,7 @@ class AppRuntime:
         state.TEXT_ONLY = self.args.text_only
         state.SAVE_TEXT = self.args.text or self.args.text_only
         state.SAVE_COMMENTS = self.args.comments
+        state.LIVE_CHAT_MODE = self.args.live_chat
         if self.args.no_history:
             state.DOWNLOAD_HISTORY_ENABLED = False
         state.TARGET_ARTISTS = parse_target_artists(self.args.artists)
