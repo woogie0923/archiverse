@@ -11,10 +11,12 @@ from pathlib import Path
 from . import utils
 from .utils import console
 from . import state
-from .config import DOWNLOAD_SLEEP, STOP_THRESHOLD, get_folder
+from .config import DOWNLOAD_SLEEP, PAGED_SLEEP, STOP_THRESHOLD, get_folder
 from .text_writer import (
     save_post_text, embed_url_metadata, fetch_comments,
     artist_post_url, moment_url, official_post_url,
+    prepare_member_profile_comment, save_member_comment_post_text,
+    _format_post_header_ts,
 )
 from .api import make_extractor, run_extr, fetch_post_details, register_member_name
 from .helpers import (
@@ -25,6 +27,8 @@ from .downloader import (
     get_official_video_url, mark_downloaded
 )
 from .download_cache import is_post_in_history
+from .official_media import process_official_media
+from .official_media_menu import process_official_media_menu
 
 
 def _count_cached_post_toward_stop(consecutive_no_new: int, post_id: str) -> tuple[int, bool]:
@@ -40,8 +44,6 @@ def _count_cached_post_toward_stop(consecutive_no_new: int, post_id: str) -> tup
         )
         return consecutive_no_new, True
     return consecutive_no_new, False
-from .official_media import process_official_media
-from .official_media_menu import process_official_media_menu
 
 
 def process_single_post(post_id: str):
@@ -602,6 +604,175 @@ def _process_artist_posts_for_member(member_name: str, member_id: str, former: b
         current_cursor = resp.get("paging", {}).get("nextParams", {}).get("after")
         if not current_cursor:
             break
+
+
+def _fetch_member_comments_page(member_id: str, cursor: str | None) -> tuple[list, str | None]:
+    req = (
+        f"/comment/v1.0/member-{member_id}/comments"
+        f"?fieldSet=memberCommentsV1&limit=20&sortType=LATEST"
+    )
+    if cursor:
+        req += f"&after={cursor.replace(',', '%2C')}"
+    try:
+        resp = run_extr(make_extractor(), req)
+        items = resp.get("data", []) if isinstance(resp, dict) else []
+        nxt = (resp.get("paging") or {}).get("nextParams", {}).get("after") if isinstance(resp, dict) else None
+        return items, nxt
+    except Exception as e:
+        console.print(f"  [!] Member comments fetch failed: {e}")
+        return [], None
+
+
+def _flush_member_comment_groups(artist_name: str, grouped: dict) -> int:
+    """Write grouped fan-post comments and mark comment IDs in history. Returns files written/updated."""
+    written = 0
+    clean_artist = sanitise(artist_name)
+    for post_id, bundle in grouped.items():
+        comments = bundle["comments"]
+        comments.sort(key=lambda c: c.get("_ts_raw") or 0)
+        for c in comments:
+            c.pop("_ts_raw", None)
+        is_mem = bool(bundle.get("membership_only"))
+        tier = "Membership" if is_mem else "Public"
+        ts_raw = bundle.get("date_ts") or 0
+        date = utils.timestamp(ts_raw) if ts_raw else utils.timestamp(0)
+        out_dir = get_folder(
+            "comments",
+            community=state.COMMUNITY_NAME,
+            tier=tier,
+            artist=clean_artist,
+        )
+        if not str(out_dir).strip():
+            out_dir = get_folder(
+                "artist_posts",
+                community=state.COMMUNITY_NAME,
+                tier=tier,
+                artist=clean_artist,
+            )
+            out_dir = str(Path(out_dir).parent.parent / "Comments" / clean_artist)
+        os.makedirs(out_dir, exist_ok=True)
+        stem = make_filename(
+            clean_artist,
+            date,
+            post_id,
+            title="",
+            template_key="artist_posts",
+            tier=tier,
+        )
+        ok = save_member_comment_post_text(
+            output_dir=out_dir,
+            filename_stem=stem,
+            post_id=post_id,
+            post_author_name=bundle.get("post_author_name") or "Unknown",
+            post_date_header=_format_post_header_ts(ts_raw),
+            post_body=bundle.get("post_body") or "",
+            weverse_url=bundle.get("share_url") or "",
+            comments=comments,
+        )
+        if ok:
+            written += 1
+            for c in comments:
+                cid = c.get("commentId")
+                if cid:
+                    mark_downloaded(str(cid))
+    grouped.clear()
+    return written
+
+
+def _process_artist_comments_for_member(member_name: str, member_id: str):
+    """
+    Archive one artist's profile-tab comments (fan posts only).
+
+    Skips comments on other artists/members' posts — those are saved with Artist Posts.
+    """
+    register_member_name(member_id, member_name)
+    console.print(f"\n  -> Scanning comments: {member_name}\n")
+
+    current_cursor = None
+    consecutive_no_new = 0
+    grouped: dict = {}
+
+    while True:
+        items, current_cursor = _fetch_member_comments_page(member_id, current_cursor)
+        if not items:
+            break
+
+        for item in items:
+            prepared = prepare_member_profile_comment(item)
+            if prepared is None:
+                continue
+
+            is_mem = prepared["membership_only"]
+            if is_mem and state.SKIP_MEMBERSHIP:
+                continue
+            if (not is_mem) and state.SKIP_PUBLIC:
+                continue
+
+            comment_id = str(prepared["comment"].get("commentId") or "").strip()
+            if comment_id and is_post_in_history(comment_id):
+                consecutive_no_new, should_stop = _count_cached_post_toward_stop(
+                    consecutive_no_new, comment_id
+                )
+                if should_stop:
+                    _flush_member_comment_groups(member_name, grouped)
+                    return
+                continue
+
+            consecutive_no_new = 0
+            post_id = prepared["post_id"]
+            bundle = grouped.setdefault(post_id, {
+                "post_author_name": prepared["post_author_name"],
+                "post_body": prepared["post_body"],
+                "share_url": prepared["share_url"],
+                "membership_only": prepared["membership_only"],
+                "date_ts": prepared["comment"].get("_ts_raw") or 0,
+                "comments": [],
+            })
+            bundle["comments"].append(prepared["comment"])
+            ts = prepared["comment"].get("_ts_raw") or 0
+            if ts and (not bundle.get("date_ts") or ts < bundle["date_ts"]):
+                bundle["date_ts"] = ts
+
+        if consecutive_no_new >= STOP_THRESHOLD:
+            break
+        if not current_cursor:
+            break
+        time.sleep(PAGED_SLEEP)
+
+    n = _flush_member_comment_groups(member_name, grouped)
+    if n:
+        console.print(f"  [Comments] Saved/updated {n} post file(s) for {member_name}.")
+
+
+def process_artist_comments():
+    """Archive artist profile comments on fan posts (Comments folder)."""
+    from .config import CFG as _CFG
+
+    console.print(f"\nProcessing Artist Comments for {state.COMMUNITY_NAME}...")
+    artists_data = run_extr(
+        make_extractor(),
+        f"/artistpedia/v1.0/community-{state.COMMUNITY_ID}/highlight",
+    )
+
+    current_ids: set = set()
+    for artist in artists_data.get("artistProfiles", []):
+        member_name = artist["artistOfficialProfile"]["officialName"]
+        member_id   = artist["memberId"]
+        current_ids.add(member_id)
+        register_member_name(member_id, member_name)
+        if not matches_target(member_name):
+            continue
+        _process_artist_comments_for_member(member_name, member_id)
+
+    for entry in _CFG.get("former_members", {}).get(state.COMMUNITY_NAME, []):
+        mid  = entry.get("id", "").strip()
+        name = entry.get("name", mid).strip()
+        if not mid or mid in current_ids:
+            continue
+        if not matches_target(name):
+            continue
+        register_member_name(mid, name)
+        _process_artist_comments_for_member(name, mid)
 
 
 def process_artist_posts():

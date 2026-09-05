@@ -162,6 +162,7 @@ def interactive_menu(community_id: str, *, can_change_community: bool = False):
         ("item", "profile", "Profile Pictures"),
         ("item", "moments", "Moments"),
         ("item", "artist", "Artist Posts"),
+        ("item", "artist_comments", "Comments"),
     ]
     if official_channels:
         ARCHIVE_LAYOUT.append(("item", "official", "Official Channel"))

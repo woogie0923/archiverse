@@ -262,6 +262,187 @@ def is_text_saved(base_path: str) -> bool:
     return (p.parent / f"{p.name}.txt").exists()
 
 
+def _artist_display_name(author: dict) -> str:
+    official_name = (author or {}).get("artistOfficialProfile", {}).get("officialName", "")
+    profile_name  = (author or {}).get("profileName", "")
+    if official_name and profile_name and official_name != profile_name:
+        return f"{official_name} ({profile_name})"
+    return official_name or profile_name or ""
+
+
+def _normalize_artist_comment(c: dict) -> dict | None:
+    """Convert a raw artist-comment API item into the dict used in .txt output."""
+    author = c.get("author", {})
+    if author.get("profileType") not in ("ARTIST", "AGENCY"):
+        return None
+    body = _clean_post_body_text(c.get("body") or "")
+    if not body:
+        return None
+
+    parent_block = c.get("parent", {})
+    parent_data  = None
+    if parent_block.get("type") == "COMMENT":
+        pd          = parent_block.get("data", {})
+        parent_body = _clean_post_body_text(pd.get("body") or "")
+        if parent_body:
+            fan_author = pd.get("author", {})
+            fan_ts     = pd.get("createdAt") or pd.get("publishedAt")
+            parent_data = {
+                "commentId": pd.get("commentId", ""),
+                "fanName":   fan_author.get("profileName", ""),
+                "body":      parent_body,
+                "timestamp": _format_post_header_ts(fan_ts),
+            }
+
+    ts = c.get("createdAt") or c.get("publishedAt")
+    return {
+        "commentId":  c.get("commentId"),
+        "authorName": _artist_display_name(author),
+        "body":       body,
+        "timestamp":  _format_post_header_ts(ts),
+        "_ts_raw":    ts or 0,
+        "parent":     parent_data,
+    }
+
+
+def format_artist_comment_lines(comments: list) -> list[str]:
+    """Render artist comments in the same block used by artist-post .txt files."""
+    if not comments:
+        return []
+    lines = ["\n" + "\u2500" * 19 + " Artist Comments " + "\u2500" * 19]
+    artist_comment_ids = {c["commentId"] for c in comments if c.get("commentId")}
+    seen_parent_ids: set = set()
+    for c in comments:
+        parent = c.get("parent")
+        if parent:
+            pid = parent.get("commentId", "")
+            if pid in artist_comment_ids:
+                lines.append(f"    \u2514 [{c['timestamp']}] {c['authorName']}: {c['body']}")
+            else:
+                if pid not in seen_parent_ids:
+                    seen_parent_ids.add(pid)
+                    fan_name  = parent.get("fanName", "")
+                    fan_ts    = parent.get("timestamp", "")
+                    fan_label = f"{fan_name}: " if fan_name else ""
+                    fan_time  = f"[{fan_ts}] " if fan_ts else ""
+                    lines.append(f"  {fan_time}{fan_label}{parent['body']}")
+                lines.append(f"    \u2514 [{c['timestamp']}] {c['authorName']}: {c['body']}")
+        else:
+            lines.append(f"[{c['timestamp']}] {c['authorName']}: {c['body']}")
+    return lines
+
+
+def member_comment_root_post(item: dict) -> dict:
+    """Return the post dict a profile-tab comment belongs to."""
+    root = item.get("root") or {}
+    if str(root.get("type") or "").upper() == "POST":
+        return root.get("data") or {}
+    parent = item.get("parent") or {}
+    if str(parent.get("type") or "").upper() == "POST":
+        return parent.get("data") or {}
+    return {}
+
+
+def is_comment_on_artist_or_member_post(item: dict) -> bool:
+    """True when this comment is on another artist/member's post (already archived with artist posts)."""
+    post_author = member_comment_root_post(item).get("author") or {}
+    if str(post_author.get("profileType") or "").upper() == "ARTIST":
+        return True
+    parent = item.get("parent") or {}
+    if str(parent.get("type") or "").upper() == "COMMENT":
+        pauthor = (parent.get("data") or {}).get("author") or {}
+        if str(pauthor.get("profileType") or "").upper() in ("ARTIST", "AGENCY"):
+            return True
+    return False
+
+
+def prepare_member_profile_comment(item: dict) -> dict | None:
+    """
+    Parse one profile-tab comment for archiving.
+
+    Returns None when the comment should be skipped (empty, on an artist/member
+    post, or a reply to another artist). Otherwise a dict with post metadata
+    and a normalized comment ready for .txt output.
+    """
+    if is_comment_on_artist_or_member_post(item):
+        return None
+    parsed = _normalize_artist_comment(item)
+    if not parsed:
+        return None
+    post = member_comment_root_post(item)
+    post_id = str(post.get("postId") or "").strip()
+    if not post_id:
+        return None
+    post_author = post.get("author") or {}
+    share_url = (post.get("shareUrl") or "").strip()
+    if not share_url and state.COMMUNITY_NAME:
+        share_url = official_post_url(state.COMMUNITY_NAME, post_id)
+    return {
+        "post_id": post_id,
+        "post_author_name": (
+            post_author.get("profileName")
+            or post_author.get("artistOfficialProfile", {}).get("officialName")
+            or "Unknown"
+        ),
+        "post_body": post.get("body") or post.get("plainBody") or "",
+        "share_url": share_url,
+        "membership_only": bool(post.get("membershipOnly", False)),
+        "comment": parsed,
+    }
+
+
+def save_member_comment_post_text(
+    *,
+    output_dir: str,
+    filename_stem: str,
+    post_id: str,
+    post_author_name: str,
+    post_date_header: str,
+    post_body: str,
+    weverse_url: str,
+    comments: list,
+) -> bool:
+    """
+    Write (or append) a fan-post comment archive in artist-post comment format.
+    Returns True if the file was created or new comments were appended.
+    """
+    if not comments:
+        return False
+    txt_path = Path(output_dir) / f"{filename_stem}.txt"
+    comment_lines = format_artist_comment_lines(comments)
+    if not comment_lines:
+        return False
+
+    txt_path.parent.mkdir(parents=True, exist_ok=True)
+    if txt_path.exists():
+        existing = txt_path.read_text(encoding="utf-8")
+        to_add = comment_lines[1:] if "Artist Comments" in existing else comment_lines
+        if not to_add:
+            return False
+        with txt_path.open("a", encoding="utf-8") as f:
+            if not existing.endswith("\n"):
+                f.write("\n")
+            f.write("\n".join(to_add) + "\n")
+        console.print(f"  [Text] Updated: {txt_path.name}")
+        return True
+
+    lines = [
+        f"Post ID   : {post_id}",
+        f"Artist    : {post_author_name}",
+        f"Date      : {post_date_header}",
+    ]
+    if weverse_url:
+        lines.append(f"URL       : {weverse_url}")
+    lines.append("\u2500" * 55)
+    body = _clean_post_body_text(post_body or "")
+    if body:
+        lines.append(body)
+    lines.extend(comment_lines)
+    txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    console.print(f"  [Text] Saved: {txt_path.name}")
+    return True
+
+
 def _fetch_comment_page(post_id: str, cursor: str | None) -> tuple[list, str | None]:
     req = (
         f"/comment/v1.0/post-{post_id}/artistComments"
@@ -305,45 +486,9 @@ def fetch_comments(post_id: str) -> tuple[list, str]:
                     if raw:
                         post_body = _clean_post_body_text(raw)
 
-            author = c.get("author", {})
-            if author.get("profileType") not in ("ARTIST", "AGENCY"):
-                continue
-            body = _clean_post_body_text(c.get("body") or "")
-            if not body:
-                continue
-
-            official_name = author.get("artistOfficialProfile", {}).get("officialName", "")
-            profile_name  = author.get("profileName", "")
-            if official_name and profile_name and official_name != profile_name:
-                display_name = f"{official_name} ({profile_name})"
-            else:
-                display_name = official_name or profile_name
-
-            parent_block = c.get("parent", {})
-            parent_data  = None
-            if parent_block.get("type") == "COMMENT":
-                pd          = parent_block.get("data", {})
-                parent_body = _clean_post_body_text(pd.get("body") or "")
-                if parent_body:
-                    fan_author = pd.get("author", {})
-                    fan_ts     = pd.get("createdAt") or pd.get("publishedAt")
-                    parent_data = {
-                        "commentId": pd.get("commentId", ""),
-                        "fanName":   fan_author.get("profileName", ""),
-                        "body":      parent_body,
-                        "timestamp": _format_post_header_ts(fan_ts),
-                    }
-
-            ts = c.get("createdAt") or c.get("publishedAt")
-            ts_header = _format_post_header_ts(ts)
-            comments.append({
-                "commentId":  c.get("commentId"),
-                "authorName": display_name,
-                "body":       body,
-                "timestamp":  ts_header,
-                "_ts_raw":    ts or 0,
-                "parent":     parent_data,
-            })
+            parsed = _normalize_artist_comment(c)
+            if parsed:
+                comments.append(parsed)
 
     cursor = None
     while True:
@@ -432,31 +577,7 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
     lines.append("\u2500" * 55)
     if body: lines.append(body)
     if comments:
-        lines.append("\n" + "\u2500" * 19 + " Artist Comments " + "\u2500" * 19)
-        # Build a set of comment IDs that belong to artist comments to
-        # detect when an artist replied to their own comment.
-        artist_comment_ids = {c["commentId"] for c in comments if c.get("commentId")}
-        seen_parent_ids: set = set()
-        for c in comments:
-            parent = c.get("parent")
-            if parent:
-                pid = parent.get("commentId", "")
-                if pid in artist_comment_ids:
-                    # Artist replied to their own comment — just indent the reply,
-                    # the parent is already rendered as a standalone artist comment.
-                    lines.append(f"    \u2514 [{c['timestamp']}] {c['authorName']}: {c['body']}")
-                else:
-                    # Artist replied to a fan comment — show fan comment once then indent.
-                    if pid not in seen_parent_ids:
-                        seen_parent_ids.add(pid)
-                        fan_name  = parent.get("fanName", "")
-                        fan_ts    = parent.get("timestamp", "")
-                        fan_label = f"{fan_name}: " if fan_name else ""
-                        fan_time  = f"[{fan_ts}] " if fan_ts else ""
-                        lines.append(f"  {fan_time}{fan_label}{parent['body']}")
-                    lines.append(f"    \u2514 [{c['timestamp']}] {c['authorName']}: {c['body']}")
-            else:
-                lines.append(f"[{c['timestamp']}] {c['authorName']}: {c['body']}")
+        lines.extend(format_artist_comment_lines(comments))
 
     if urls:
         lines.append("\n" + "\u2500" * 24 + " Links " + "\u2500" * 24)

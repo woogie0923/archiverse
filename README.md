@@ -132,7 +132,7 @@ python -m archiverse -c fromis9
 | Selected artists: moments | `uv run archiverse -c RedVelvet -a IRENE SEULGI --moments` |
 | Live menu or direct live ID | `uv run archiverse -c Apink --live` / `uv run archiverse -c fromis9 --live 4-12345678` |
 | Live VOD chat logs | `--live-chat all` or `--live-chat artist` with `--live` (default: none) |
-| Artist posts, photos only | `uv run archiverse -c fromis9 -a "SONG HA YOUNG" --artist --type photo` |
+| Artist profile comments | `uv run archiverse -c stayc -a Sumin --artist-comments` |
 | Official channel by member ID | `uv run archiverse -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673` |
 | Official media tab | `uv run archiverse -c aespa --media` / `uv run archiverse -c aespa --media 4-223153860` |
 | Official media browser | `uv run archiverse -c APINK --media-menu` |
@@ -177,6 +177,8 @@ For finished lives saved as plain MP4 (not Widevine), resolved stream URLs are *
 - **`-id` / `--community_ids`** — supply community IDs if slug lookup fails (same order as `-c`)
 
 For `--post` fan posts with artist replies, text output is saved under the first artist who replied inside a dedicated `Fan Post Comments` subfolder.
+
+The **Comments** archive action (`--artist-comments`) saves an artist’s fan-post comments (from their profile Comments tab) under `{tier}/Comments/{artist}`. Comments on other artists’ posts are omitted because those are already archived with Artist Posts.
 ---
 
 ## Configuration highlights

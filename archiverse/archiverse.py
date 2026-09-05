@@ -30,7 +30,7 @@ Usage Examples:
     uv run archiverse -c fromis9 --skip-membership --official 58afde0dbc1fccd94cd44eff91fa3673
     uv run archiverse -c fromis9 --media 4-223153860
     uv run archiverse -c APINK --media-menu
-    uv run archiverse -c LESSERAFIM -a Chaewon --artist --text-only --comments --skip-public
+    uv run archiverse -c stayc -a Sumin --artist-comments
 
     # Alternative (without uv):
     python -m archiverse -c fromis9 --debug
@@ -122,6 +122,8 @@ def main():
                           help="Download a single post by ID (artist or official channel).")
     g_action.add_argument("--artist", action="store_true",
                           help="Archive Artist Posts (photos/videos).")
+    g_action.add_argument("--artist-comments", action="store_true",
+                          help="Archive artist profile comments on fan posts (skips replies on other artists' posts).")
     g_action.add_argument("--profile", action="store_true",
                           help="Download artist profile pictures, covers, and official images.")
     g_action.add_argument("--media", nargs="?", const=True, metavar="POST_ID",

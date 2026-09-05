@@ -4,6 +4,14 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-09-06 (v0.1.8)
+
+### Added
+
+- **Comments archive** — new **Comments** item under Archive (CLI: `--artist-comments`) downloads an artist’s profile-tab comments on fan posts via `/comment/v1.0/member-{id}/comments`. Replies on other artists’/members’ posts are skipped (those stay with Artist Posts). Output uses the same Artist Comments text format and is saved under a `Comments/{artist}` folder.
+
+---
+
 ## 2026-06-21 (v0.1.7)
 
 ### Added

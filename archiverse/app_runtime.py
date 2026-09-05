@@ -12,6 +12,7 @@ from .live import get_key as live_get_key, process_lives
 from .ongoing_live import process_ongoing_lives, select_ongoing_live_options
 from .processors import (
     process_artist_posts,
+    process_artist_comments,
     process_member_profiles,
     process_moments,
     process_official_media,
@@ -23,10 +24,12 @@ from rich.text import Text
 from .utils import console
 
 ACTION_ORDER = [
-    "profile", "moments", "artist", "official", "media",
+    "profile", "moments", "artist", "artist_comments", "official", "media",
     "media_menu", "live", "ongoing_live",
 ]
-ARTIST_REQUIRED_ACTIONS = {"artist", "moments", "live", "media", "media_menu", "profile"}
+ARTIST_REQUIRED_ACTIONS = {
+    "artist", "artist_comments", "moments", "live", "media", "media_menu", "profile",
+}
 
 
 def parse_target_artists(artists_arg):
@@ -45,6 +48,7 @@ def any_action_selected(args) -> bool:
         args.live or args.moments or args.artist or args.profile
         or args.official or args.media or args.media_menu or args.post
         or args.ongoing_live_monitor or args.ongoing_live_now
+        or args.artist_comments
     )
 
 
@@ -172,6 +176,8 @@ class AppRuntime:
             process_single_post(self.args.post)
         if self.args.artist:
             process_artist_posts()
+        if self.args.artist_comments:
+            process_artist_comments()
         if self.args.profile:
             process_member_profiles()
         if self.args.official:
@@ -185,6 +191,8 @@ class AppRuntime:
     def _execute_selected_action(self, action_key: str, chosen_channels) -> Any:
         if action_key == "artist":
             return process_artist_posts()
+        if action_key == "artist_comments":
+            return process_artist_comments()
         if action_key == "moments":
             return process_moments()
         if action_key == "live":

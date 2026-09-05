@@ -76,6 +76,16 @@ def _resolve_cache_path(req: str) -> Path | None:
         fname = f"{safe_name}_{mid}.json" if safe_name else f"{mid}.json"
         return artists_dir / fname
 
+    m = re.search(r"/comment/v1.0/member-([a-f0-9]+)/comments", req)
+    if m:
+        mid = m.group(1)
+        artists_dir = root / "artists"
+        artists_dir.mkdir(exist_ok=True)
+        name = _member_names.get(mid, "")
+        safe_name = re.sub(r'[<>:"/\\|?* ]', "_", name) if name else ""
+        fname = f"{safe_name}_{mid}_comments.json" if safe_name else f"{mid}_comments.json"
+        return artists_dir / fname
+
     # Individual post detail
     if "/post/v1.0/post-" in req:
         return root / "post_details.json"
@@ -158,6 +168,48 @@ def _slim_response(req: str, data: dict) -> dict:
     """
     if not isinstance(data, dict):
         return data
+
+    if "/comment/v1.0/member-" in req and "/comments" in req:
+        def _slim_nested_author_block(parent: dict) -> dict:
+            pdata = parent.get("data") or {}
+            return {
+                "type": parent.get("type"),
+                "data": {
+                    "postId":      pdata.get("postId"),
+                    "commentId":   pdata.get("commentId"),
+                    "body":        pdata.get("body"),
+                    "plainBody":   pdata.get("plainBody"),
+                    "createdAt":   pdata.get("createdAt"),
+                    "publishedAt": pdata.get("publishedAt"),
+                    "author":      _slim_author(pdata.get("author") or {}),
+                },
+            }
+
+        def _slim_member_comment(c):
+            root = c.get("root") or {}
+            rdata = root.get("data") or {}
+            return {
+                "body":      c.get("body"),
+                "createdAt": c.get("createdAt"),
+                "commentId": c.get("commentId"),
+                "author":    _slim_author(c.get("author") or {}),
+                "parent":    _slim_nested_author_block(c.get("parent") or {}),
+                "root": {
+                    "type": root.get("type"),
+                    "data": {
+                        "postId":         rdata.get("postId"),
+                        "shareUrl":       rdata.get("shareUrl"),
+                        "body":           rdata.get("body"),
+                        "plainBody":      rdata.get("plainBody"),
+                        "membershipOnly": rdata.get("membershipOnly"),
+                        "author":         _slim_author(rdata.get("author") or {}),
+                    },
+                },
+            }
+        return {
+            "data":   [_slim_member_comment(c) for c in data.get("data", [])],
+            "paging": data.get("paging"),
+        }
 
     if "/artistComments" in req:
         def _slim_comment(c):

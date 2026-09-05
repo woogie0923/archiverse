@@ -85,7 +85,9 @@ def get_folder(key: str, **kwargs) -> str:
     pass community/artist/tier/channel as relevant.
     
     """
-    template = FOLDERS.get(key, "")
+    template = FOLDERS.get(key) or {
+        "comments": "{base}/{community}/{media}/{tier}/Comments/{artist}",
+    }.get(key, "")
     kwargs.setdefault("base",  BASE_DIR)
     kwargs.setdefault("media", MEDIA_FOLDER)
     return template.format(**kwargs)
