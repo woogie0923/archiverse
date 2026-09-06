@@ -121,7 +121,8 @@ folders:
   lives:            "{base}/{community}/{media}/{tier}/Lives/{artist}"
   moments:          "{base}/{community}/{media}/{tier}/Moments/{artist}"
   artist_posts:     "{base}/{community}/{media}/{tier}/Artist Posts/{artist}"
-  comments:         "{base}/{community}/{media}/{tier}/Comments/{artist}"
+  comments:         "{base}/{community}/{media}/{tier}/Fanposts/{artist}"
+  fanposts:         "{base}/{community}/{media}/{tier}/Fanposts/{artist}"
   official_media:   "{base}/{community}/{media}/{tier}/Official Media"
   official_channel: "{base}/{community}/{media}/Official Channel/{channel}"
   profiles:         "{base}/{community}/{media}/Profile Pictures/{artist}"
@@ -168,6 +169,7 @@ filename_templates:
   moments:        "{tier} {community} {artist} {date} {post_id}"
   artist_posts:   "{tier} {date} {artist} {post_id}"
   comments:       "{tier} {date} {artist} {post_id}"
+  fanposts:       "{tier} {date} {artist} {post_id}"
   official_posts: "{artist} {date} {post_id}"
   official_media: "{tier} {artist} {date} {title} {post_id}"
 

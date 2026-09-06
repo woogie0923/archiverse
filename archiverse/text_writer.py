@@ -272,8 +272,12 @@ def _artist_display_name(author: dict) -> str:
 
 def _normalize_artist_comment(c: dict) -> dict | None:
     """Convert a raw artist-comment API item into the dict used in .txt output."""
-    author = c.get("author", {})
-    if author.get("profileType") not in ("ARTIST", "AGENCY"):
+    author = c.get("author") or {}
+    ptype = str(author.get("profileType") or "").upper()
+    has_official = bool(author.get("artistOfficialProfile"))
+    if ptype and ptype not in ("ARTIST", "AGENCY"):
+        return None
+    if not ptype and not has_official:
         return None
     body = _clean_post_body_text(c.get("body") or "")
     if not body:
@@ -335,48 +339,43 @@ def format_artist_comment_lines(comments: list) -> list[str]:
 def member_comment_root_post(item: dict) -> dict:
     """Return the post dict a profile-tab comment belongs to."""
     root = item.get("root") or {}
-    if str(root.get("type") or "").upper() == "POST":
-        return root.get("data") or {}
+    rdata = root.get("data") if isinstance(root.get("data"), dict) else {}
+    if rdata.get("postId"):
+        return rdata
+    if str(root.get("type") or "").upper() == "POST" and rdata:
+        return rdata
     parent = item.get("parent") or {}
-    if str(parent.get("type") or "").upper() == "POST":
-        return parent.get("data") or {}
+    pdata = parent.get("data") if isinstance(parent.get("data"), dict) else {}
+    if str(parent.get("type") or "").upper() == "POST" and (pdata.get("postId") or pdata):
+        return pdata
     return {}
 
 
 def is_comment_on_artist_or_member_post(item: dict) -> bool:
     """True when this comment is on another artist/member's post (already archived with artist posts)."""
     post_author = member_comment_root_post(item).get("author") or {}
-    if str(post_author.get("profileType") or "").upper() == "ARTIST":
-        return True
-    parent = item.get("parent") or {}
-    if str(parent.get("type") or "").upper() == "COMMENT":
-        pauthor = (parent.get("data") or {}).get("author") or {}
-        if str(pauthor.get("profileType") or "").upper() in ("ARTIST", "AGENCY"):
-            return True
-    return False
+    return str(post_author.get("profileType") or "").upper() == "ARTIST"
 
 
 def prepare_member_profile_comment(item: dict) -> dict | None:
     """
     Parse one profile-tab comment for archiving.
 
-    Returns None when the comment should be skipped (empty, on an artist/member
-    post, or a reply to another artist). Otherwise a dict with post metadata
-    and a normalized comment ready for .txt output.
+    Returns None when the comment is on an artist/member post. Otherwise a dict
+    with post metadata and a normalized comment ready for .txt output.
     """
     if is_comment_on_artist_or_member_post(item):
-        return None
-    parsed = _normalize_artist_comment(item)
-    if not parsed:
         return None
     post = member_comment_root_post(item)
     post_id = str(post.get("postId") or "").strip()
     if not post_id:
         return None
+    parsed = _normalize_artist_comment(item)
     post_author = post.get("author") or {}
     share_url = (post.get("shareUrl") or "").strip()
     if not share_url and state.COMMUNITY_NAME:
         share_url = official_post_url(state.COMMUNITY_NAME, post_id)
+    published = post.get("publishedAt") or item.get("createdAt") or item.get("publishedAt") or 0
     return {
         "post_id": post_id,
         "post_author_name": (
@@ -387,6 +386,8 @@ def prepare_member_profile_comment(item: dict) -> dict | None:
         "post_body": post.get("body") or post.get("plainBody") or "",
         "share_url": share_url,
         "membership_only": bool(post.get("membershipOnly", False)),
+        "published_at": published,
+        "post_author": post_author,
         "comment": parsed,
     }
 
@@ -503,33 +504,48 @@ def fetch_comments(post_id: str) -> tuple[list, str]:
     return comments, post_body
 
 
-def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url: str = "", fetch_artist_comments: bool = False, force_comments: bool = False):
+def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url: str = "", fetch_artist_comments: bool = False, force_comments: bool = False, force_text: bool = False, extra_comments: list | None = None):
     """
     force_comments=True: always include artist comments regardless of SAVE_COMMENTS.
-    Use for moments where artist replies are primary content, not supplemental.
+    force_text=True: write the .txt even when SAVE_TEXT is off (fanpost archive).
+      Also ignores download-history skips so a missing .txt can still be created.
+    extra_comments: already-normalized comments to merge in (e.g. profile-tab comments).
     """
-    if not state.SAVE_TEXT: return
+    if not state.SAVE_TEXT and not force_text:
+        return False
     txt_path = Path(output_dir) / f"{filename_stem}.txt"
-    if txt_path.exists(): return
+    if txt_path.exists():
+        return False
     raw_pid = post.get("postId")
     pid_str = str(raw_pid).strip() if raw_pid is not None and raw_pid != "" else ""
-    if pid_str:
+    # History means media was recorded, not that a .txt exists. Fanposts must
+    # still write text when force_text is set.
+    if pid_str and not force_text:
         from .download_cache import _load_dl_history
-        if pid_str in _load_dl_history(): return
+        if pid_str in _load_dl_history():
+            return False
 
     raw_body = (post.get("body") or post.get("plainBody") or "").strip()
     if raw_body.strip().lower() in ("moment uploaded.", ""):
         raw_body = ""
     body = _clean_post_body_text(raw_body)
 
-    comments = []
+    comments = [c for c in (extra_comments or []) if isinstance(c, dict)]
     post_body_from_api = ""
     _fetch_pid = pid_str or str(post.get("postId", ""))
     if fetch_artist_comments:
         if force_comments or state.SAVE_COMMENTS:
-            comments, post_body_from_api = fetch_comments(_fetch_pid)
+            fetched, post_body_from_api = fetch_comments(_fetch_pid)
             if not force_comments and not state.SAVE_COMMENTS:
-                comments = []
+                fetched = []
+            seen = {c.get("commentId") for c in comments if c.get("commentId")}
+            for c in fetched:
+                cid = c.get("commentId")
+                if cid and cid in seen:
+                    continue
+                comments.append(c)
+                if cid:
+                    seen.add(cid)
         else:
             _, post_body_from_api = fetch_comments(_fetch_pid)
 
@@ -564,8 +580,8 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
         seen: set[str] = set()
         urls = [u for u in urls if not (u in seen or seen.add(u))]
 
-    if not body and not comments and not urls:
-        return
+    if not body and not comments and not urls and not force_text:
+        return False
 
     txt_path.parent.mkdir(parents=True, exist_ok=True)
     author = post.get("author", {})
@@ -585,6 +601,7 @@ def save_post_text(post: dict, output_dir: str, filename_stem: str, weverse_url:
 
     txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     console.print(f"  [Text] Saved: {txt_path.name}")
+    return True
 
 
 def artist_post_url(community: str, post_id: str) -> str:

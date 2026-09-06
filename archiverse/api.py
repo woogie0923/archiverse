@@ -83,7 +83,7 @@ def _resolve_cache_path(req: str) -> Path | None:
         artists_dir.mkdir(exist_ok=True)
         name = _member_names.get(mid, "")
         safe_name = re.sub(r'[<>:"/\\|?* ]', "_", name) if name else ""
-        fname = f"{safe_name}_{mid}_comments.json" if safe_name else f"{mid}_comments.json"
+        fname = f"{safe_name}_fanposts.json" if safe_name else f"{mid}_fanposts.json"
         return artists_dir / fname
 
     # Individual post detail
@@ -639,7 +639,7 @@ def fetch_onair_lives():
     return run_extr(make_extractor(), req, retries=3)
 
 
-def fetch_post_details(summary: dict):
+def fetch_post_details(summary: dict, *, apply_tier_filter: bool = True):
     """
     Fetches full post metadata for a summary item.
     Includes a password caching system for locked posts.
@@ -649,10 +649,11 @@ def fetch_post_details(summary: dict):
     """
     post_id = summary.get("postId")
 
-    if summary.get("membershipOnly") and state.SKIP_MEMBERSHIP:
-        return None
-    if not summary.get("membershipOnly") and state.SKIP_PUBLIC:
-        return None
+    if apply_tier_filter:
+        if summary.get("membershipOnly") and state.SKIP_MEMBERSHIP:
+            return None
+        if not summary.get("membershipOnly") and state.SKIP_PUBLIC:
+            return None
 
     if summary.get("locked") is True:
         console.print(f"\n  [LOCKED] Post {post_id}")

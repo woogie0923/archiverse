@@ -15,8 +15,8 @@ from .config import DOWNLOAD_SLEEP, PAGED_SLEEP, STOP_THRESHOLD, get_folder
 from .text_writer import (
     save_post_text, embed_url_metadata, fetch_comments,
     artist_post_url, moment_url, official_post_url,
-    prepare_member_profile_comment, save_member_comment_post_text,
-    _format_post_header_ts,
+    prepare_member_profile_comment,
+    is_comment_on_artist_or_member_post,
 )
 from .api import make_extractor, run_extr, fetch_post_details, register_member_name
 from .helpers import (
@@ -44,6 +44,143 @@ def _count_cached_post_toward_stop(consecutive_no_new: int, post_id: str) -> tup
         )
         return consecutive_no_new, True
     return consecutive_no_new, False
+
+
+def _fanpost_txt_exists(post_id: str, artist_name: str) -> bool:
+    """True if a Fanposts .txt for this post already exists on disk."""
+    needle = str(post_id or "").strip()
+    if not needle:
+        return False
+    for tier in ("Public", "Membership"):
+        d = Path(_fanposts_dir(artist_name, tier))
+        if not d.is_dir():
+            continue
+        for f in d.glob("*.txt"):
+            if needle in f.stem:
+                return True
+    return False
+
+
+def _fanposts_dir(artist_name: str, tier: str) -> str:
+    clean_artist = sanitise(artist_name)
+    out_dir = get_folder(
+        "fanposts",
+        community=state.COMMUNITY_NAME,
+        tier=tier,
+        artist=clean_artist,
+    )
+    if not str(out_dir).strip():
+        out_dir = get_folder(
+            "comments",
+            community=state.COMMUNITY_NAME,
+            tier=tier,
+            artist=clean_artist,
+        )
+    if not str(out_dir).strip():
+        out_dir = get_folder(
+            "artist_posts",
+            community=state.COMMUNITY_NAME,
+            tier=tier,
+            artist=clean_artist,
+        )
+        out_dir = str(Path(out_dir).parent.parent / "Fanposts" / clean_artist)
+    return out_dir
+
+
+def _archive_fanpost(full_post: dict, artist_name: str, extra_comments: list | None = None) -> bool:
+    """
+    Download one fan post the same way as an artist post: photos, videos, and text.
+    Text always includes artist comments. Returns True if new content was saved.
+    """
+    post_id = str(full_post.get("postId") or "").strip()
+    if not post_id:
+        return False
+
+    date   = utils.timestamp(full_post.get("publishedAt") or 0)
+    is_mem = bool(full_post.get("membershipOnly", False))
+    tier   = "Membership" if is_mem else "Public"
+    attachments = full_post.get("attachment") or {}
+    photos = attachments.get("photo") or {}
+    videos = attachments.get("video") or {}
+    if not isinstance(photos, dict):
+        photos = {}
+    if not isinstance(videos, dict):
+        videos = {}
+
+    share = (full_post.get("shareUrl") or "").strip()
+    _post_url = share or official_post_url(state.COMMUNITY_NAME, post_id)
+    out_dir = _fanposts_dir(artist_name, tier)
+    os.makedirs(out_dir, exist_ok=True)
+    clean_name = sanitise(artist_name)
+    template_key = "fanposts"
+
+    found_new = False
+    txt_stem = make_filename(clean_name, date, post_id, title="", template_key=template_key, tier=tier)
+    txt_path = Path(out_dir) / f"{txt_stem}.txt"
+    had_txt = txt_path.exists()
+    wrote_txt = save_post_text(
+        full_post,
+        out_dir,
+        txt_stem,
+        weverse_url=_post_url,
+        fetch_artist_comments=True,
+        force_comments=True,
+        force_text=True,
+        extra_comments=extra_comments,
+    )
+    if wrote_txt or (txt_path.exists() and not had_txt):
+        found_new = True
+    elif not txt_path.exists():
+        console.print(f"  [Fanposts] .txt was not written for {post_id} ({txt_path})")
+
+    if not state.TEXT_ONLY:
+        if state.DOWNLOAD_TYPE != "video":
+            for pid, photo in photos.items():
+                if not isinstance(photo, dict):
+                    continue
+                url = photo.get("url") or ""
+                if not url:
+                    continue
+                filename = make_filename(
+                    clean_name, date, f"{post_id}_{pid}", title="",
+                    template_key=template_key, tier=tier,
+                )
+                path = f"{out_dir}/{filename}"
+                if not is_already_downloaded(path):
+                    ok = utils.download_file(url, path, date)
+                    if ok:
+                        embed_url_metadata(path, _post_url)
+                        found_new = True
+        if state.DOWNLOAD_TYPE != "photo":
+            for vid, video_data in videos.items():
+                if not isinstance(video_data, dict):
+                    continue
+                filename = make_filename(
+                    clean_name, date, f"{post_id}_{vid}", title="",
+                    template_key=template_key, tier=tier,
+                )
+                path = f"{out_dir}/{filename}"
+                if not is_already_downloaded(path):
+                    naver_id = (
+                        (video_data.get("uploadInfo") or {}).get("videoId")
+                        or video_data.get("videoId")
+                        or ""
+                    )
+                    console.print(f"  [Video] Fanpost {post_id} / {vid}")
+                    download_cvideo(vid, path, date, naver_video_id=str(naver_id) if naver_id else None)
+                    embed_url_metadata(path, _post_url)
+                    _av = next(
+                        (
+                            f for f in Path(path).parent.iterdir()
+                            if f.name.startswith(Path(path).name + ".")
+                            and f.suffix.lower() in (".mkv", ".mp4")
+                        ),
+                        None,
+                    )
+                    if _av:
+                        utils.edit_creation_date(str(_av), date)
+                        found_new = True
+    return found_new
 
 
 def process_single_post(post_id: str):
@@ -116,6 +253,11 @@ def process_single_post(post_id: str):
 
         clean_name = sanitise(folder_artist_name)
         register_member_name(member_id, author_name)
+        if str(author.get("profileType") or "").upper() == "FAN":
+            if _archive_fanpost(full_post, folder_artist_name):
+                mark_downloaded(post_id)
+            return
+
         date        = utils.timestamp(full_post["publishedAt"])
         is_mem      = full_post.get("membershipOnly", False)
         tier        = "Membership" if is_mem else "Public"
@@ -124,9 +266,6 @@ def process_single_post(post_id: str):
         videos      = attachments.get("video", {})
         _post_url   = artist_post_url(state.COMMUNITY_NAME, post_id)
         artist_dir  = get_folder("artist_posts", community=state.COMMUNITY_NAME, tier=tier, artist=clean_name)
-        # Keep fan-post comment archives separate from normal artist-feed downloads.
-        if str(author.get("profileType") or "").upper() == "FAN":
-            artist_dir = f"{artist_dir}/Fan Post Comments"
         os.makedirs(artist_dir, exist_ok=True)
 
         if not photos and not videos:
@@ -623,115 +762,110 @@ def _fetch_member_comments_page(member_id: str, cursor: str | None) -> tuple[lis
         return [], None
 
 
-def _flush_member_comment_groups(artist_name: str, grouped: dict) -> int:
-    """Write grouped fan-post comments and mark comment IDs in history. Returns files written/updated."""
-    written = 0
-    clean_artist = sanitise(artist_name)
-    for post_id, bundle in grouped.items():
-        comments = bundle["comments"]
-        comments.sort(key=lambda c: c.get("_ts_raw") or 0)
-        for c in comments:
-            c.pop("_ts_raw", None)
-        is_mem = bool(bundle.get("membership_only"))
-        tier = "Membership" if is_mem else "Public"
-        ts_raw = bundle.get("date_ts") or 0
-        date = utils.timestamp(ts_raw) if ts_raw else utils.timestamp(0)
-        out_dir = get_folder(
-            "comments",
-            community=state.COMMUNITY_NAME,
-            tier=tier,
-            artist=clean_artist,
-        )
-        if not str(out_dir).strip():
-            out_dir = get_folder(
-                "artist_posts",
-                community=state.COMMUNITY_NAME,
-                tier=tier,
-                artist=clean_artist,
-            )
-            out_dir = str(Path(out_dir).parent.parent / "Comments" / clean_artist)
-        os.makedirs(out_dir, exist_ok=True)
-        stem = make_filename(
-            clean_artist,
-            date,
-            post_id,
-            title="",
-            template_key="artist_posts",
-            tier=tier,
-        )
-        ok = save_member_comment_post_text(
-            output_dir=out_dir,
-            filename_stem=stem,
-            post_id=post_id,
-            post_author_name=bundle.get("post_author_name") or "Unknown",
-            post_date_header=_format_post_header_ts(ts_raw),
-            post_body=bundle.get("post_body") or "",
-            weverse_url=bundle.get("share_url") or "",
-            comments=comments,
-        )
-        if ok:
-            written += 1
-            for c in comments:
-                cid = c.get("commentId")
-                if cid:
-                    mark_downloaded(str(cid))
-    grouped.clear()
-    return written
+def _listing_post_from_prepared(prepared: dict) -> dict:
+    """Minimal post dict so a .txt can be written even if post-detail fetch fails."""
+    return {
+        "postId": prepared.get("post_id"),
+        "body": prepared.get("post_body") or "",
+        "plainBody": prepared.get("post_body") or "",
+        "publishedAt": prepared.get("published_at") or 0,
+        "membershipOnly": bool(prepared.get("membership_only", False)),
+        "author": prepared.get("post_author") or {},
+        "shareUrl": prepared.get("share_url") or "",
+        "attachment": {},
+    }
 
 
-def _process_artist_comments_for_member(member_name: str, member_id: str):
+def _process_fanposts_for_member(member_name: str, member_id: str):
     """
-    Archive one artist's profile-tab comments (fan posts only).
+    Archive fan posts this artist commented on (from their profile Comments tab).
 
     Skips comments on other artists/members' posts — those are saved with Artist Posts.
+    Each fan post is downloaded like an artist post (photos, videos, and text).
     """
     register_member_name(member_id, member_name)
-    console.print(f"\n  -> Scanning comments: {member_name}\n")
+    console.print(f"\n  -> Scanning fanposts: {member_name}\n")
 
     current_cursor = None
     consecutive_no_new = 0
-    grouped: dict = {}
+    page_num = 0
+    saved_total = 0
+    skipped_artist_posts = 0
+    seen_posts: set[str] = set()
 
     while True:
         items, current_cursor = _fetch_member_comments_page(member_id, current_cursor)
         if not items:
             break
+        page_num += 1
+        page_saved = 0
 
         for item in items:
+            if is_comment_on_artist_or_member_post(item):
+                skipped_artist_posts += 1
+                continue
             prepared = prepare_member_profile_comment(item)
             if prepared is None:
+                skipped_artist_posts += 1
                 continue
 
-            is_mem = prepared["membership_only"]
+            post_id = prepared["post_id"]
+            if post_id in seen_posts:
+                continue
+            seen_posts.add(post_id)
+
+            if _fanpost_txt_exists(post_id, member_name):
+                consecutive_no_new, should_stop = _count_cached_post_toward_stop(
+                    consecutive_no_new, post_id
+                )
+                if should_stop:
+                    console.print(
+                        f"  [Fanposts] {member_name}: saved {saved_total} post(s), "
+                        f"skipped {skipped_artist_posts} on artist posts."
+                    )
+                    return
+                continue
+
+            full_post = fetch_post_details(
+                {"postId": post_id},
+                apply_tier_filter=False,
+            )
+            if not full_post:
+                console.print(
+                    f"  [Fanposts] No post details for {post_id}; writing .txt from listing."
+                )
+                full_post = _listing_post_from_prepared(prepared)
+
+            is_mem = bool(full_post.get("membershipOnly", False) or prepared.get("membership_only"))
             if is_mem and state.SKIP_MEMBERSHIP:
                 continue
             if (not is_mem) and state.SKIP_PUBLIC:
                 continue
 
-            comment_id = str(prepared["comment"].get("commentId") or "").strip()
-            if comment_id and is_post_in_history(comment_id):
-                consecutive_no_new, should_stop = _count_cached_post_toward_stop(
-                    consecutive_no_new, comment_id
-                )
-                if should_stop:
-                    _flush_member_comment_groups(member_name, grouped)
+            extra = [prepared["comment"]] if prepared.get("comment") else []
+            if _archive_fanpost(full_post, member_name, extra_comments=extra):
+                mark_downloaded(post_id)
+                consecutive_no_new = 0
+                page_saved += 1
+                saved_total += 1
+            else:
+                consecutive_no_new += 1
+                if consecutive_no_new >= STOP_THRESHOLD:
+                    console.print(
+                        f"  [Stop] Reached {STOP_THRESHOLD} consecutive cached posts — moving on."
+                    )
+                    console.print(
+                        f"  [Fanposts] {member_name}: saved {saved_total} post(s), "
+                        f"skipped {skipped_artist_posts} on artist posts."
+                    )
                     return
-                continue
 
-            consecutive_no_new = 0
-            post_id = prepared["post_id"]
-            bundle = grouped.setdefault(post_id, {
-                "post_author_name": prepared["post_author_name"],
-                "post_body": prepared["post_body"],
-                "share_url": prepared["share_url"],
-                "membership_only": prepared["membership_only"],
-                "date_ts": prepared["comment"].get("_ts_raw") or 0,
-                "comments": [],
-            })
-            bundle["comments"].append(prepared["comment"])
-            ts = prepared["comment"].get("_ts_raw") or 0
-            if ts and (not bundle.get("date_ts") or ts < bundle["date_ts"]):
-                bundle["date_ts"] = ts
+        if state.DEBUG_MODE:
+            console.print(
+                f"  [Fanposts] {member_name} page {page_num}: "
+                f"{page_saved} new post(s), "
+                f"{skipped_artist_posts} skipped (on artist posts) so far."
+            )
 
         if consecutive_no_new >= STOP_THRESHOLD:
             break
@@ -739,16 +873,20 @@ def _process_artist_comments_for_member(member_name: str, member_id: str):
             break
         time.sleep(PAGED_SLEEP)
 
-    n = _flush_member_comment_groups(member_name, grouped)
-    if n:
-        console.print(f"  [Comments] Saved/updated {n} post file(s) for {member_name}.")
+    if saved_total:
+        console.print(f"  [Fanposts] Saved {saved_total} post(s) for {member_name}.")
+    else:
+        console.print(
+            f"  [Fanposts] No fan posts saved for {member_name} "
+            f"({skipped_artist_posts} were on other artists' posts)."
+        )
 
 
-def process_artist_comments():
-    """Archive artist profile comments on fan posts (Comments folder)."""
+def process_fanposts():
+    """Archive fan posts commented on by selected artists."""
     from .config import CFG as _CFG
 
-    console.print(f"\nProcessing Artist Comments for {state.COMMUNITY_NAME}...")
+    console.print(f"\nProcessing Fanposts for {state.COMMUNITY_NAME}...")
     artists_data = run_extr(
         make_extractor(),
         f"/artistpedia/v1.0/community-{state.COMMUNITY_ID}/highlight",
@@ -762,7 +900,7 @@ def process_artist_comments():
         register_member_name(member_id, member_name)
         if not matches_target(member_name):
             continue
-        _process_artist_comments_for_member(member_name, member_id)
+        _process_fanposts_for_member(member_name, member_id)
 
     for entry in _CFG.get("former_members", {}).get(state.COMMUNITY_NAME, []):
         mid  = entry.get("id", "").strip()
@@ -772,7 +910,12 @@ def process_artist_comments():
         if not matches_target(name):
             continue
         register_member_name(mid, name)
-        _process_artist_comments_for_member(name, mid)
+        _process_fanposts_for_member(name, mid)
+
+
+def process_artist_comments():
+    """Backward-compatible alias for process_fanposts()."""
+    return process_fanposts()
 
 
 def process_artist_posts():

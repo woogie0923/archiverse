@@ -4,6 +4,19 @@ All notable changes to this project are recorded here. The history below follows
 
 ---
 
+## 2026-09-07 (v0.1.9)
+
+### Added
+
+- **Fanposts archive** — **Archive → Fanposts** (CLI: `--fanposts`) finds fan posts an artist commented on via their profile Comments tab, then downloads photos, videos, and text like Artist Posts. Replies on other artists’/members’ posts are skipped. Output is saved under `Fanposts/{artist}`. `--artist-comments` remains as an alias.
+
+### Fixed
+
+- **Fanposts writes as it goes** — each fan post is archived when found (media + `.txt` with artist comments). Profile-tab API cache files are named `{Artist}_fanposts.json`.
+- **Fanposts `.txt` skipped after a cached fetch** — download history no longer blocks writing Fanposts text. If a post was fetched (and even marked in `downloaded.json`) but the `.txt` was never created, the next Fanposts run writes it. Profile-tab comments are merged into the file even when the post’s artist-comments API returns nothing.
+
+---
+
 ## 2026-09-06 (v0.1.8)
 
 ### Added
