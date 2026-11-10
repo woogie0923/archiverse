@@ -26,6 +26,7 @@ from .config import (
     COMMON_HEADERS,
     apply_weverse_tokens_in_memory,
     persist_weverse_tokens_to_config,
+    reload_weverse_tokens_from_config,
 )
 
 
@@ -81,18 +82,74 @@ def _save_cached_token(data: dict):
         pass
 
 
+def _config_refresh_token() -> str:
+    return str(CFG.get("weverse_refresh_token") or CFG.get("refresh_token") or "").strip()
+
+
+def _clear_cached_token() -> None:
+    p = _token_cache_path()
+    try:
+        if p.exists():
+            p.unlink()
+    except OSError:
+        pass
+
+
 def get_refresh_token() -> str:
     """
     Refresh token for accountapi.weverse.io.
 
-    Prefer the token stored in weverse_token.json after a successful refresh
-    (server may rotate it); fall back to config.
+    A newly pasted token in config.yaml wins over weverse_token.json, so a
+    rotated/stale cache cannot block a token the user just copied in.
+    After a successful refresh, the rotated token from the server is used.
     """
+    reload_weverse_tokens_from_config()
+    config_rt = _config_refresh_token()
     cached = _load_cached_token()
     cached_rt = str(cached.get("refreshToken") or "").strip()
+    source_config_rt = str(cached.get("sourceConfigRefreshToken") or "").strip()
+    if config_rt and config_rt not in (cached_rt, source_config_rt):
+        return config_rt
     if cached_rt:
         return cached_rt
-    return str(CFG.get("weverse_refresh_token") or CFG.get("refresh_token") or "").strip()
+    return config_rt
+
+
+def _refresh_headers() -> dict:
+    # Never send Authorization: accountapi rejects refresh if an expired
+    # access token is attached as Bearer.
+    return {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "Origin": "https://weverse.io",
+        "Referer": "https://weverse.io/",
+        "User-Agent": COMMON_HEADERS.get("User-Agent") or (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "x-acc-app-secret": _X_ACC_APP_SECRET,
+        "x-acc-app-version": _X_ACC_APP_VERSION,
+        "x-acc-language": "en",
+        "x-acc-service-id": "weverse",
+        "x-acc-trace-id": str(uuid.uuid4()),
+        "x-clog-user-device-id": str(uuid.uuid4()),
+    }
+
+
+def _post_refresh(refresh_token: str) -> dict:
+    """POST /token/refresh with only the refresh token. No access token."""
+    payload = json.dumps({"refreshToken": refresh_token})
+    with requests.Session() as session:
+        session.headers.clear()
+        resp = session.post(
+            _REFRESH_ENDPOINT,
+            headers=_refresh_headers(),
+            data=payload,
+            timeout=30,
+        )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def get_access_token(min_valid_seconds: int = 6 * 3600, *, force: bool = False) -> str:
@@ -103,7 +160,9 @@ def get_access_token(min_valid_seconds: int = 6 * 3600, *, force: bool = False) 
     is close to expiring.
 
     force=True: always POST /token/refresh (e.g. after HTTP 401 from the API).
+    Reloads config.yaml first so a newly pasted refresh token is used.
     """
+    reload_weverse_tokens_from_config()
     cached = _load_cached_token()
     now = int(time.time())
     expires = int(cached.get("expires") or 0)
@@ -126,30 +185,37 @@ def get_access_token(min_valid_seconds: int = 6 * 3600, *, force: bool = False) 
         return str(access)
 
     refresh_token = get_refresh_token()
+    config_rt = _config_refresh_token()
     # If no refresh token is configured, fall back to the static auth_token.
     if not refresh_token:
-        # COMMON_HEADERS.Authorization is already "Bearer <token>".
         bearer = COMMON_HEADERS.get("Authorization", "")
         if bearer.lower().startswith("bearer "):
             return bearer[7:]
         return bearer
 
-    headers = {
-        "content-type": "application/json",
-        "origin": "https://weverse.io",
-        "referer": "https://weverse.io/",
-        "x-acc-app-secret": _X_ACC_APP_SECRET,
-        "x-acc-app-version": _X_ACC_APP_VERSION,
-        "x-acc-language": "en",
-        "x-acc-service-id": "weverse",
-        "x-acc-trace-id": str(uuid.uuid4()),
-        "x-clog-user-device-id": str(uuid.uuid4()),
-    }
-    raw = json.dumps({"refreshToken": refresh_token})
+    candidates: list[str] = []
+    for token in (refresh_token, config_rt):
+        if token and token not in candidates:
+            candidates.append(token)
 
-    resp = requests.post(_REFRESH_ENDPOINT, headers=headers, data=raw, timeout=30)
-    resp.raise_for_status()
-    response = resp.json()
+    last_err: Exception | None = None
+    response = None
+    for i, candidate in enumerate(candidates):
+        try:
+            if i > 0:
+                console.print(
+                    "  [Auth] Cached refresh token was rejected; "
+                    "retrying with weverse_refresh_token from config.yaml…"
+                )
+            response = _post_refresh(candidate)
+            last_err = None
+            break
+        except Exception as e:
+            last_err = e
+
+    if response is None:
+        _clear_cached_token()
+        raise last_err or RuntimeError("Token refresh failed")
 
     accessToken = response["accessToken"]
     refreshToken = response["refreshToken"]
@@ -158,6 +224,7 @@ def get_access_token(min_valid_seconds: int = 6 * 3600, *, force: bool = False) 
     data = {
         "accessToken": accessToken,
         "refreshToken": refreshToken,
+        "sourceConfigRefreshToken": refreshToken,
         # Store absolute epoch seconds.
         "expires": (now + expiresIn),
     }

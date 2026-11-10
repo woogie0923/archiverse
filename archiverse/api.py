@@ -24,6 +24,14 @@ from .config import (
     get_folder, CACHE_ENABLED,
 )
 
+
+def _redact_token_text(text: str) -> str:
+    """Strip JWTs from error bodies so logs do not print access tokens."""
+    if not text:
+        return text
+    return re.sub(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", "[redacted-jwt]", text)
+
+
 # ---------------------------------------------------------------------------
 # API response cache
 #
@@ -372,6 +380,11 @@ class _DirectWeverseExtractor:
         method = "POST" if data is not None else "GET"
         payload = data if data is not None else None
         headers = {"WEV-device-Id": self._device_id}
+        # Session is created once; always apply the current Bearer token so a
+        # successful refresh is used on the next request.
+        auth = COMMON_HEADERS.get("Authorization")
+        if auth:
+            headers["Authorization"] = auth
         if data is not None:
             headers["Content-Type"] = "application/json"
         try:
@@ -382,7 +395,7 @@ class _DirectWeverseExtractor:
             raise Exception(f"HTTP request failed: {e}")
 
         if resp.status_code < 200 or resp.status_code >= 300:
-            body = (resp.text or "")[:300]
+            body = _redact_token_text((resp.text or "")[:300])
             raise Exception(f"HTTP {resp.status_code}: {body}")
 
         try:
@@ -479,6 +492,7 @@ def run_extr(extr, req, post=False, retries=None):
             )
 
             if is_401 and not auth_refresh_done:
+                auth_refresh_done = True
                 try:
                     from .weverse_auth import get_refresh_token, get_access_token
 
@@ -487,10 +501,14 @@ def run_extr(extr, req, post=False, retries=None):
                             "  [Auth] HTTP 401 — refreshing access token and retrying…"
                         )
                         get_access_token(force=True)
-                        auth_refresh_done = True
                         continue
                 except Exception as re_err:
                     console.print(f"  [Auth] Token refresh failed: {re_err}")
+                    console.print(
+                        "  [Auth] Not retrying Weverse with the expired access token. "
+                        "Paste a new weverse_refresh_token in config.yaml and run again."
+                    )
+                    raise e
 
             attempt += 1
 

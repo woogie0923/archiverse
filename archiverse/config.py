@@ -143,6 +143,23 @@ def persist_weverse_tokens_to_config(access_token: str, refresh_token: str) -> b
         return False
 
 
+def reload_weverse_tokens_from_config() -> None:
+    """
+    Re-read auth_token / refresh token keys from config.yaml into CFG.
+
+    Lets a newly pasted weverse_refresh_token be used without restarting.
+    """
+    try:
+        data = _load()
+    except Exception:
+        return
+    if not isinstance(data, dict):
+        return
+    for key in ("weverse_refresh_token", "refresh_token", "auth_token"):
+        if key in data and data.get(key) is not None:
+            CFG[key] = data[key]
+
+
 def apply_weverse_tokens_in_memory(access_token: str, refresh_token: str) -> None:
     """Keep module-level AUTH_TOKEN / CFG / COMMON_HEADERS aligned after a refresh."""
     global AUTH_TOKEN
